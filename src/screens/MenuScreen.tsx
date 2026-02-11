@@ -11,7 +11,10 @@ import { RootStackParamList } from "../../App";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import Feather from "react-native-vector-icons/Feather";
 import api from "../config/api";
+import { clearProfile, clearToken } from "../utils/authStorage";
+import { resetToLogin } from "../navigation/navigationRef";
 import MessageBox from "../components/MessageBox";
+import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 
 
 type Props = NativeStackScreenProps<RootStackParamList, "Menu">;
@@ -38,12 +41,11 @@ export default function MenuScreen({ navigation }: Props) {
     setLogoutVisible(true);
   };
 
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
     setLogoutVisible(false);
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Login" }],
-    });
+    await clearToken();
+    await clearProfile();
+    resetToLogin();
   };
   const menuItems: MenuItem[] = [
     
@@ -72,7 +74,11 @@ export default function MenuScreen({ navigation }: Props) {
       icon: <Ionicons name="book-outline" size={22} color="#38bdf8" />,
       onPress: () => navigation.navigate("AileCuzdani"),
     },
-    { title: "Raporlar", icon: <Ionicons name="pie-chart-outline" size={22} color="#38bdf8" /> },
+    {
+      title: "Raporlar",
+      icon: <Ionicons name="pie-chart-outline" size={22} color="#38bdf8" />,
+      onPress: () => navigation.navigate("Raporlar"),
+    },
     { title: "Arşiv / Silinen", icon: <Ionicons name="archive-outline" size={22} color="#38bdf8" /> },
    
     { title: "Notlar", icon: <Ionicons name="clipboard-outline" size={22} color="#facc15" /> },
@@ -99,13 +105,16 @@ useEffect(() => {
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <Text style={styles.screenTitle}>Menü</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={26} color="#e5e7eb" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Menü"
+        subtitle="Hızlı erişim"
+        right={
+          <HeaderAction
+            icon={<Ionicons name="close" size={16} color="#e5e7eb" />}
+            onPress={() => navigation.goBack()}
+          />
+        }
+      />
 
       {/* MENU LIST */}
 <ScrollView contentContainerStyle={styles.listContainer}>

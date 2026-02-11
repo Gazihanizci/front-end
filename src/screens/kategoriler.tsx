@@ -9,7 +9,8 @@ import {
   Modal,
 } from "react-native";
 import { ActivityIndicator } from "react-native";
-import { getUserId } from "../utils/authStorage";
+import api from "../config/api";
+import ScreenHeader from "../components/ScreenHeader";
 
 type Kategori = {
   id: number;
@@ -59,7 +60,6 @@ export default function Kategoriler() {
   const [selected, setSelected] = useState<Kategori | null>(null);
   const [amountVisible, setAmountVisible] = useState(false);
   const [saving, setSaving] = useState(false);
-  const API_BASE = "http://192.168.234.156:8080"; // Spring Boot base’in neyse onu yaz
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -84,33 +84,16 @@ const createIslem = async () => {
     return;
   }
 
-  const userId = await getUserId();
-  if (!userId) {
-    // kullanıcı yoksa login’e at
-    return;
-  }
-
   setSaving(true);
   try {
-    const res = await fetch(`${API_BASE}/api/islemler`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-USER-ID": String(userId),
-      },
-      body: JSON.stringify({
+    const res = await api.post("/api/islemler", {
         kategoriId: selected.id,
-        tutar: tutarNum,          // backend BigDecimal alır
+        tutar: tutarNum,
         aciklama: description?.trim() || null,
-        // islemTarihi göndermek istersen:
-        // islemTarihi: new Date().toISOString().slice(0,19),
-      }),
-    });
+      });
 
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-      const msg = json?.message || "İşlem kaydedilemedi";
-      throw new Error(msg);
+    if (!res || !res.data) {
+      // no-op, axios throws on non-2xx
     }
 
     // ✅ başarılı
@@ -128,10 +111,10 @@ const createIslem = async () => {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Kategoriler</Text>
-        <Text style={styles.subTitle}>Gelir ve gider kalemlerini düzenle</Text>
-      </View>
+      <ScreenHeader
+        title="Kategoriler"
+        subtitle="Gelir ve gider kalemlerini düzenle"
+      />
 
       <View style={styles.searchWrap}>
         <TextInput

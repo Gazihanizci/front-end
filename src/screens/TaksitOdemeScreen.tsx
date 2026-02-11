@@ -14,9 +14,9 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
 import api from "../config/api";
-import { getUserId } from "../utils/authStorage";
 import MessageBox from "../components/MessageBox";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TaksitOdeme">;
 
@@ -167,15 +167,8 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
   const fetchMy = useCallback(async () => {
     setLoadingList(true);
     try {
-      const userId = await getUserId();
-      if (!userId) {
-        setItems([]);
-        return;
-      }
 
-      const res = await api.get("/api/taksitler/my", {
-        headers: { "X-USER-ID": String(userId) },
-      });
+      const res = await api.get("/api/taksitler/my");
 
       const arr = Array.isArray(res.data) ? res.data : [];
       setItems(arr);
@@ -221,11 +214,6 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
 
     setSaving(true);
     try {
-      const userId = await getUserId();
-      if (!userId) {
-        showMessage("Hata", "Kullanıcı bilgisi bulunamadı.", "error");
-        return;
-      }
 
       const payload = {
         taksitBasligi: baslik,
@@ -235,9 +223,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
         aciklama: form.aciklama?.trim() || null,
       };
 
-      await api.post("/api/taksitler", payload, {
-        headers: { "X-USER-ID": String(userId) },
-      });
+      await api.post("/api/taksitler", payload);
 
       setForm((p) => ({
         ...p,
@@ -266,15 +252,8 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
 
       showConfirm("Taksiti Bitir", "Bu taksiti bitirmek istiyor musun?", async () => {
         try {
-          const userId = await getUserId();
-          if (!userId) {
-            showMessage("Hata", "Kullanıcı bilgisi bulunamadı.", "error");
-            return;
-          }
 
-          await api.patch(`/api/taksitler/${taksitId}/finish`, null, {
-            headers: { "X-USER-ID": String(userId) },
-          });
+          await api.patch(`/api/taksitler/${taksitId}/finish`, null);
 
           await fetchMy();
           showMessage("Başarılı", "Taksit bitirildi.", "success");
@@ -308,15 +287,23 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4 }}>
-          <Ionicons name="chevron-back" size={26} color="#e5e7eb" />
-        </TouchableOpacity>
-        <Text style={styles.screenTitle}>Taksit Ödemeleri</Text>
-        <TouchableOpacity onPress={fetchMy} style={{ padding: 4 }}>
-          <Ionicons name="refresh" size={20} color="#e5e7eb" />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Taksit Ödemeleri"
+        subtitle="Düzenli ödemeler"
+        left={
+          <HeaderAction
+            label="Geri"
+            icon={<Ionicons name="chevron-back" size={16} color="#e5e7eb" />}
+            onPress={() => navigation.goBack()}
+          />
+        }
+        right={
+          <HeaderAction
+            icon={<Ionicons name="refresh" size={16} color="#e5e7eb" />}
+            onPress={fetchMy}
+          />
+        }
+      />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

@@ -12,7 +12,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { RootStackParamList } from "../../App";
 import api from "../config/api";
-import { getUserId } from "../utils/authStorage";
+import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Islemler">;
 
@@ -112,20 +112,12 @@ export default function IslemlerScreen({ navigation }: Props) {
           setLoadingMore(true);
         }
 
-        const userId = await getUserId();
-        if (!userId) {
-          setError("Kullanıcı bilgisi bulunamadı");
-          if (mode !== "more") setItems([]);
-          return;
-        }
-
         const nextPage = mode === "more" ? page + 1 : 0;
 
         // ✅ DİKKAT:
         // baseURL "...:8080/api" ise: "/islemler/my"
         // baseURL "...:8080" ise: "/api/islemler/my"
         const res = await api.get("/api/islemler/my", {
-          headers: { "X-USER-ID": String(userId) },
           params: { page: nextPage, size, sort: "islemTarihi,desc" },
         });
 
@@ -267,13 +259,17 @@ export default function IslemlerScreen({ navigation }: Props) {
 
   return (
 <View style={styles.container}>
-  <View style={styles.header}>
-    <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4 }}>
-      <Ionicons name="chevron-back" size={26} color="#e5e7eb" />
-    </TouchableOpacity>
-    <Text style={styles.screenTitle}>İşlemler</Text>
-    <View style={{ width: 26 }} />
-  </View>
+  <ScreenHeader
+    title="İşlemler"
+    subtitle="Tüm işlemler"
+    left={
+      <HeaderAction
+        label="Geri"
+        icon={<Ionicons name="chevron-back" size={16} color="#e5e7eb" />}
+        onPress={() => navigation.goBack()}
+      />
+    }
+  />
 
   {loading ? (
     <View style={styles.loadingWrap}>
@@ -492,5 +488,4 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
 });
-
 

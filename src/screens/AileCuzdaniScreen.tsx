@@ -15,7 +15,7 @@ import * as Progress from "react-native-progress";
 import Svg, { Circle, G } from "react-native-svg";
 import api from "../config/api";
 import { RootStackParamList } from "../../App";
-import { getUserId } from "../utils/authStorage";
+import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AileCuzdani">;
 
@@ -130,14 +130,6 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
     setLoadingMembers(true);
 
     try {
-      const userId = await getUserId();
-      if (!userId) {
-        setAnaliz(null);
-        setCategorySummary([]);
-        setMemberIncome([]);
-        setMemberExpense([]);
-        return;
-      }
 
       const yilAy = getCurrentYM();
 
@@ -146,7 +138,6 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
       // baseURL "...:8080/api" ise -> "/familywallet/monthly"
       const res = await api.get<FamilyWalletResponse>("/api/familywallet/monthly", {
         params: { yilAy },
-        headers: { "X-USER-ID": String(userId) },
       });
 
       const data = res.data;
@@ -431,13 +422,17 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
       <View style={styles.bgCircleOne} />
       <View style={styles.bgCircleTwo} />
       <View style={styles.bgRing} />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4 }}>
-          <Ionicons name="chevron-back" size={26} color="#e5e7eb" />
-        </TouchableOpacity>
-        <Text style={styles.screenTitle}>Aile Cüzdanı</Text>
-        <View style={{ width: 26 }} />
-      </View>
+      <ScreenHeader
+        title="Aile Cüzdanı"
+        subtitle="Aile bütçesi özeti"
+        left={
+          <HeaderAction
+            label="Geri"
+            icon={<Ionicons name="chevron-back" size={16} color="#e5e7eb" />}
+            onPress={() => navigation.goBack()}
+          />
+        }
+      />
 
       <ScrollView
         contentContainerStyle={styles.content}

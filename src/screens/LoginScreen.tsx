@@ -15,11 +15,18 @@ import {
 import api from "../config/api";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
-import { saveUserId } from "../utils/authStorage";
+import { saveProfile, saveToken } from "../utils/authStorage";
 import MessageBox from "../components/MessageBox";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 type MsgType = "success" | "error" | "info";
+type AuthResponse = {
+  mesaj: string;
+  kullaniciId: number;
+  email: string;
+  accessToken: string;
+  tokenType: "Bearer";
+};
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   //UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -34,6 +41,7 @@ export default function LoginScreen({ navigation }: Props) {
   const [msgText, setMsgText] = useState("");
   const [msgType, setMsgType] = useState<MsgType>("info");
   const [nextRoute, setNextRoute] = useState<"Home" | null>(null);
+  const [pendingAuth, setPendingAuth] = useState<{ token: string; kullaniciId?: number; email?: string } | null>(null);
 
   // ✅ kart büyüme anim
   const cardAnim = useRef(new Animated.Value(0)).current; // 0 kapalı, 1 açık
@@ -87,6 +95,21 @@ export default function LoginScreen({ navigation }: Props) {
 
   const handleMsgClose = () => {
     setMsgVisible(false);
+    if (pendingAuth) {
+      const { token, kullaniciId, email } = pendingAuth;
+      saveToken(token).then(() => {
+        if (kullaniciId && email) {
+          return saveProfile({ kullaniciId, email });
+        }
+      }).finally(() => {
+        setPendingAuth(null);
+        if (nextRoute) {
+          setNextRoute(null);
+          navigation.replace(nextRoute);
+        }
+      });
+      return;
+    }
     if (nextRoute) {
       setNextRoute(null);
       navigation.replace(nextRoute);
@@ -124,18 +147,21 @@ export default function LoginScreen({ navigation }: Props) {
 
     setLoading(true);
     try {
-      const res = await api.post("/api/auth/login", {
+      const res = await api.post<AuthResponse>("/api/auth/login", {
         email: email.trim(),
         parola: parola.trim(),
       });
 
-      const userId = res?.data?.kullaniciId;
-      if (userId == null) {
-        showMsg("error", "Kullanıcı bilgisi alınamadı");
+      const token = res?.data?.accessToken;
+      if (!token) {
+        showMsg("error", "Token alinmadi");
         return;
       }
-      await saveUserId(userId);
-
+      setPendingAuth({
+        token,
+        kullaniciId: res?.data?.kullaniciId,
+        email: res?.data?.email,
+      });
       setNextRoute("Home");
       showMsg("success", "Giriş başarılı");
     } catch (err: any) {

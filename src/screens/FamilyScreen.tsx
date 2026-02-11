@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import api from "../config/api";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
-import { getUserId } from "../utils/authStorage";
+import { getProfile } from "../utils/authStorage";
+import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import {
   View,
   Text,
@@ -117,14 +118,29 @@ export default function FamilyAccountScreen({ navigation }: Props) {
     fetchFamilyInfo();
   }, [fetchFamilyInfo]);
 
-  useEffect(() => {
-    const loadUserId = async () => {
-      const idStr = await getUserId();
-      const idNum = idStr ? Number(idStr) : null;
-      setLoggedInUserId(Number.isFinite(idNum) ? idNum : null);
-    };
-    loadUserId();
-  }, []);
+useEffect(() => {
+  let active = true;
+
+  const loadProfile = async () => {
+    const profile = await getProfile();
+    if (active && profile?.kullaniciId) {
+      setLoggedInUserId(profile.kullaniciId);
+      return;
+    }
+    try {
+      const res = await api.get("/api/userinfo");
+      if (active) setLoggedInUserId(res?.data?.kullaniciId ?? null);
+    } catch {
+      if (active) setLoggedInUserId(null);
+    }
+  };
+
+  loadProfile();
+  return () => {
+    active = false;
+  };
+}, []);
+
 
   const removeMember = async (targetUserId: number) => {
     if (!familyInfo?.aileId) return;
@@ -132,7 +148,7 @@ export default function FamilyAccountScreen({ navigation }: Props) {
       await api.post(`/api/aileler/${familyInfo.aileId}/uyeler/${targetUserId}/cikar`);
       await fetchFamilyInfo();
     } catch (err: any) {
-      console.log("Aileden ��karma hata:", err?.response?.data || err?.message);
+      console.log("Aileden çıkarma hata:", err?.response?.data || err?.message);
     }
   };
 
@@ -242,11 +258,15 @@ export default function FamilyAccountScreen({ navigation }: Props) {
         err?.response?.data ||
         err?.message;
       console.log("Aileye katılma hata:", status, apiMessage);
-      setJoinError(
-        typeof apiMessage === "string" && apiMessage.trim().length > 0
-          ? apiMessage
-          : "Katılma işlemi başarısız. Bilgileri kontrol et."
-      );
+      if (status === 401) {
+        setJoinError("Parola hatalı. Lütfen tekrar deneyin.");
+      } else {
+        setJoinError(
+          typeof apiMessage === "string" && apiMessage.trim().length > 0
+            ? apiMessage
+            : "Katılma işlemi başarısız. Bilgileri kontrol et."
+        );
+      }
     } finally {
       setSaving(false);
     }
@@ -258,18 +278,11 @@ export default function FamilyAccountScreen({ navigation }: Props) {
   return (
     <View style={styles.screen}>
       {/* TOP BAR */}
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.topBarLeft}>Geri</Text>
-        </TouchableOpacity>
-
-        <View style={styles.topBarCenter}>
-          <Text style={styles.topTitle}>Aile Hesabı</Text>
-          <Text style={styles.topSub}>Aile oluştur / aileye katıl</Text>
-        </View>
-
-        <View style={{ width: 40 }} />
-      </View>
+      <ScreenHeader
+        title="Aile Hesabı"
+        subtitle="Aile oluştur / aileye katıl"
+        left={<HeaderAction label="Geri" onPress={() => navigation.goBack()} />}
+      />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
         {/* HERO */}
@@ -761,6 +774,7 @@ debugText: {
   cancelBtn: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
   cancelText: { color: "#94a3b8", fontWeight: "800" },
 });
+
 
 
 

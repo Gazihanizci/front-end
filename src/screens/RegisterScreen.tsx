@@ -10,6 +10,7 @@ import {
   Keyboard,
 } from "react-native";
 import api from "../config/api";
+import { saveProfile, saveToken } from "../utils/authStorage";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
 
@@ -19,6 +20,13 @@ import MessageBox from "../components/MessageBox";
 type Props = NativeStackScreenProps<RootStackParamList, "Register">;
 
 type MsgType = "success" | "error" | "info";
+type AuthResponse = {
+  mesaj: string;
+  kullaniciId: number;
+  email: string;
+  accessToken: string;
+  tokenType: "Bearer";
+};
 
 export default function RegisterScreen({ navigation }: Props) {
   const [ad, setAd] = useState("");
@@ -32,7 +40,7 @@ export default function RegisterScreen({ navigation }: Props) {
   const [msgVisible, setMsgVisible] = useState(false);
   const [msgText, setMsgText] = useState("");
   const [msgType, setMsgType] = useState<MsgType>("info");
-  const [nextRoute, setNextRoute] = useState<"Login" | null>(null);
+  const [nextRoute, setNextRoute] = useState<"Home" | null>(null);
 
   const showMsg = (type: MsgType, text: string) => {
     setMsgType(type);
@@ -66,7 +74,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
     setLoading(true);
     try {
-      await api.post("/api/auth/register", {
+      const res = await api.post<AuthResponse>("/api/auth/register", {
         ad: ad.trim(),
         soyad: soyad.trim(),
         email: email.trim(),
@@ -74,7 +82,18 @@ export default function RegisterScreen({ navigation }: Props) {
         telefon: telefon.trim() || null,
       });
 
-      setNextRoute("Login");
+      const token = res?.data?.accessToken;
+      if (token) {
+        await saveToken(token);
+        if (res?.data?.kullaniciId && res?.data?.email) {
+          await saveProfile({
+            kullaniciId: res.data.kullaniciId,
+            email: res.data.email,
+          });
+        }
+      }
+
+      setNextRoute("Home");
       showMsg("success", "Kayıt tamamlandı");
     } catch (err: any) {
       showMsg(

@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -11,6 +12,10 @@ import kategoriler from "./src/screens/kategoriler";
 import IslemlerScreen from "./src/screens/IslemlerScreen";
 import AileCuzdaniScreen from "./src/screens/AileCuzdaniScreen";
 import TaksitOdemeScreen from "./src/screens/TaksitOdemeScreen";
+import RaporlarScreen from "./src/screens/Raporlar";
+import { getToken, onAuthTokenChanged } from "./src/utils/authStorage";
+import { navigationRef } from "./src/navigation/navigationRef";
+
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
@@ -21,27 +26,64 @@ export type RootStackParamList = {
   Islemler: undefined;
   AileCuzdani: undefined;
   TaksitOdeme: undefined;
-
+  Raporlar: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
+  const [checking, setChecking] = useState(true);
+  const [isAuthed, setIsAuthed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const init = async () => {
+      const token = await getToken();
+      if (active) {
+        setIsAuthed(!!token);
+        setChecking(false);
+      }
+    };
+    init();
+
+    const unsub = onAuthTokenChanged((token) => {
+      setIsAuthed(!!token);
+    });
+
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, []);
+
+  if (checking) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName="Login"
-        screenOptions={{ headerShown: false }}
-      >
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Register" component={RegisterScreen} />
-        <Stack.Screen name="FamilyAccount" component={FamilyScreen} />
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="Menu" component={MenuScreen} /> 
-        <Stack.Screen name="Categories" component={kategoriler} />
-        <Stack.Screen name="Islemler" component={IslemlerScreen} />
-        <Stack.Screen name="AileCuzdani" component={AileCuzdaniScreen} />
-        <Stack.Screen name="TaksitOdeme" component={TaksitOdemeScreen} />
+    <NavigationContainer ref={navigationRef}>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!isAuthed ? (
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+          </>
+        ) : (
+          <>
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Menu" component={MenuScreen} />
+            <Stack.Screen name="FamilyAccount" component={FamilyScreen} />
+            <Stack.Screen name="Categories" component={kategoriler} />
+            <Stack.Screen name="Islemler" component={IslemlerScreen} />
+            <Stack.Screen name="AileCuzdani" component={AileCuzdaniScreen} />
+            <Stack.Screen name="TaksitOdeme" component={TaksitOdemeScreen} />
+            <Stack.Screen name="Raporlar" component={RaporlarScreen} />
+          </>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -1,7 +1,8 @@
 ﻿import React, { useEffect, useMemo, useState, useCallback } from "react";
 import api from "../config/api";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../App"; // ğŸ”´ yolu projene gÃ¶re kontrol et
+import { RootStackParamList } from "../../App"; // 🔴 yolu projene göre kontrol et
+import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import {
   View,
   Text,
@@ -53,7 +54,7 @@ type CategorySummaryItem = {
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 export default function HomeScreen({ navigation }: Props) {
   // =========================
-  // âœ… STATE
+  // ✅ STATE
   // =========================
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingAccount, setLoadingAccount] = useState(true);
@@ -84,7 +85,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [loadingCategorySummary, setLoadingCategorySummary] = useState(true);
 
   // =========================
-  // âœ… HELPERS
+  // ✅ HELPERS
   // =========================
   const formatTRY = (n: number) =>
     (Number.isFinite(n) ? n : 0).toLocaleString("tr-TR", {
@@ -107,11 +108,11 @@ export default function HomeScreen({ navigation }: Props) {
     const now = new Date();
     const curKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    // yilAy "2026-02" / "2026-02-01" / "2026-02-01T00:00:00" => slice(0,7) Ã§alÄ±ÅŸÄ±r
+    // yilAy "2026-02" / "2026-02-01" / "2026-02-01T00:00:00" => slice(0,7) çalışır
     const current = arr.find((x) => String(x.yilAy).slice(0, 7) === curKey);
     if (current) return current;
 
-    // yoksa en gÃ¼nceli seÃ§
+    // yoksa en günceli seç
     return [...arr].sort((a, b) => String(a.yilAy).localeCompare(String(b.yilAy))).at(-1) ?? null;
   };
   const getCurrentYM = () => {
@@ -121,7 +122,7 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   // =========================
-  // âœ… DERIVED (donut)
+  // ✅ DERIVED (donut)
   // =========================
   const totalIncome = analiz?.aylikGelir ?? 0;
   const totalExpense = analiz?.aylikGider ?? 0;
@@ -129,20 +130,7 @@ export default function HomeScreen({ navigation }: Props) {
   const monthLabel = useMemo(() => {
     if (!analiz?.yilAy) return "AYLIK";
     const m = Number(String(analiz.yilAy).split("-")[1]);
-    const aylar = [
-      "OCAK",
-      "ŞUBAT",
-      "MART",
-      "NİSAN",
-      "MAYIS",
-      "HAZİRAN",
-      "TEMMUZ",
-      "AĞUSTOS",
-      "EYLÜL",
-      "EKİM",
-      "KASIM",
-      "ARALIK",
-    ];
+    const aylar = ["OCAK", "ŞUBAT", "MART", "NİSAN", "MAYIS", "HAZİRAN", "TEMMUZ", "AĞUSTOS", "EYLÜL", "EKİM", "KASIM", "ARALIK"];
     return aylar[(m || 1) - 1] ?? "AYLIK";
   }, [analiz?.yilAy]);
 
@@ -189,7 +177,7 @@ export default function HomeScreen({ navigation }: Props) {
   }, [marketTs]);
 
   // =========================
-  // âœ… FETCH: ACCOUNTS
+  // ✅ FETCH: ACCOUNTS
   // =========================
   const fetchAccounts = useCallback(async () => {
     setLoadingAccount(true);
@@ -208,14 +196,14 @@ export default function HomeScreen({ navigation }: Props) {
 
       setModalVisible(!list || list.length === 0);
     } catch (err: any) {
-      console.log("Hesapları çekme hata:", err?.response?.data || err?.message);
+      console.log("Hesaplar çekme hata:", err?.response?.data || err?.message);
     } finally {
       setLoadingAccount(false);
     }
   }, []);
 
   // =========================
-  // âœ… FETCH: LAST 6 MONTHS
+  // ✅ FETCH: LAST 6 MONTHS
   // =========================
   const fetchSon6Ay = useCallback(async () => {
     setLoading6Ay(true);
@@ -274,14 +262,8 @@ export default function HomeScreen({ navigation }: Props) {
   setLoadingCategorySummary(true);
   try {
     const yilAy = getCurrentYM();
-    const headerUserId = userInfo?.kullaniciId;
-    if (!headerUserId) {
-      setCategorySummary([]);
-      return;
-    }
     const res = await api.get("/api/categorysummary/monthly", {
       params: { yilAy },
-      headers: { "X-USER-ID": headerUserId },
     });
     const arr = Array.isArray(res.data) ? res.data : [];
     const normalized: CategorySummaryItem[] = arr.map((x: any) => ({
@@ -297,9 +279,9 @@ export default function HomeScreen({ navigation }: Props) {
   } finally {
     setLoadingCategorySummary(false);
   }
-}, [userInfo?.kullaniciId]);
+}, []);
   // =========================
-  // âœ… EFFECTS
+  // ✅ EFFECTS
   // =========================
   useEffect(() => {
     fetchAccounts();
@@ -324,7 +306,7 @@ export default function HomeScreen({ navigation }: Props) {
     }
   }, [fetchAccounts, fetchSon6Ay, fetchUserInfo, fetchMarket, fetchCategorySummaryMonthly]);
 
-  // son6Ay gelince donut iÃ§in analiz seÃ§
+  // son6Ay gelince donut için analiz seç
 useEffect(() => {
   if (!loading6Ay) {
     setAnaliz(son6Ay.length ? son6Ay[son6Ay.length - 1] : null);
@@ -332,7 +314,7 @@ useEffect(() => {
 }, [son6Ay, loading6Ay]);
 
   // =========================
-  // âœ… CHART (dynamic)
+  // ✅ CHART (dynamic)
   // =========================
   const months = useMemo(() => son6Ay.map((x) => monthShort(x.yilAy)), [son6Ay]);
   const incomes = useMemo(() => son6Ay.map((x) => x.aylikGelir || 0), [son6Ay]);
@@ -346,7 +328,7 @@ useEffect(() => {
   };
 
   // =========================
-  // âœ… CREATE ACCOUNT
+  // ✅ CREATE ACCOUNT
   // =========================
   const createHesap = async () => {
     if (saving) return;
@@ -371,14 +353,14 @@ useEffect(() => {
 
       fetchAccounts();
     } catch (err: any) {
-      console.log("Hesap oluÅŸturma hata:", err?.response?.data || err?.message);
+      console.log("Hesap oluşturma hata:", err?.response?.data || err?.message);
     } finally {
       setSaving(false);
     }
   };
 
   // =========================
-  // ✅ UPDATE BALANCE
+  // ? UPDATE BALANCE
   // =========================
   const openBalanceModal = (account: Account) => {
     setSelectedAccount({ id: account.id, name: account.name });
@@ -394,11 +376,7 @@ useEffect(() => {
 
     setUpdatingBalance(true);
     try {
-      await api.patch(
-        `/api/hesaplar/${selectedAccount.id}/bakiye`,
-        { bakiye: bakiyeNum },
-        { headers: { "X-USER-ID": 5 } }
-      );
+      await api.patch(`/api/hesaplar/${selectedAccount.id}/bakiye`, { bakiye: bakiyeNum });
       setAccounts((prev) =>
         prev.map((a) => (a.id === selectedAccount.id ? { ...a, balance: bakiyeNum } : a))
       );
@@ -420,7 +398,7 @@ const addMonths = (d: Date, diff: number) => {
 const formatYM = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
-// âœ… Bu ay dahil son 6 ayÄ± Ã¼retir, backend verisi yoksa 0 yazar
+// ✅ Bu ay dahil son 6 ayı üretir, backend verisi yoksa 0 yazar
 
 const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAnaliz[] => {
   const safeRaw = Array.isArray(raw) ? raw : [];
@@ -454,30 +432,21 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
 
 
   // =========================
-  // âœ… UI
+  // ✅ UI
   // =========================
   return (
     <View style={styles.screen}>
-      {/* TOP BAR */}
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.navigate("Menu")}>
-          <Text style={styles.topBarLeft}>Menü</Text>
-        </TouchableOpacity>
-
-        <View style={styles.topBarCenter}>
-          <Text style={styles.topTitle}>Bizim İşletme</Text>
-          <Text style={styles.topSub}>
-  {loadingUserInfo
-    ? "YÃ¼kleniyor..."
-    : userInfo
-    ? `${userInfo.ad} ${userInfo.soyad}`
-    : "KullanÄ±cÄ±"}
-</Text>
-
-        </View>
-
-        <View style={{ width: 40 }} />
-      </View>
+      <ScreenHeader
+        title="Bizim İşletme"
+        subtitle={
+          loadingUserInfo
+            ? "YÜKLENİYOR..."
+            : userInfo
+            ? `${userInfo.ad} ${userInfo.soyad}`
+            : "Kullanıcı"
+        }
+        left={<HeaderAction label="Menü" onPress={() => navigation.navigate("Menu")} />}
+      />
 
       <ScrollView
         contentContainerStyle={{ paddingBottom: 28 }}
@@ -489,7 +458,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           />
         }
       >
-        {/* AYLIK Ã–ZET */}
+        {/* AYLIK ÖZET */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>{monthLabel} GELİR / GİDER</Text>
@@ -539,7 +508,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           </View>
         </View>
 
-        {/* 6 AYLIK KARÅILAÅTIRMA */}
+        {/* 6 AYLIK KARŞILAŞTIRMA */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>SON 6 AY Karşılaştırma</Text>
 
@@ -696,7 +665,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 <Text style={styles.rateCode}>Dolar / TL</Text>
               </View>
               <Text style={styles.rateValue}>
-                {marketLoading ? "Yükleniyor..." : formatRateValue(marketData?.USDTRY?.value)}
+                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(marketData?.USDTRY?.value)}
               </Text>
             </View>
 
@@ -708,7 +677,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 <Text style={styles.rateCode}>Euro / TL</Text>
               </View>
               <Text style={styles.rateValue}>
-                {marketLoading ? "Yükleniyor..." : formatRateValue(marketData?.EURTRY?.value)}
+                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(marketData?.EURTRY?.value)}
               </Text>
             </View>
 
@@ -720,7 +689,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 <Text style={styles.rateCode}>Sterlin / TL</Text>
               </View>
               <Text style={styles.rateValue}>
-                {marketLoading ? "Yükleniyor..." : formatRateValue(marketData?.GBPTRY?.value)}
+                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(marketData?.GBPTRY?.value)}
               </Text>
             </View>
 
@@ -732,7 +701,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 <Text style={styles.rateCode}>Gram Altın</Text>
               </View>
               <Text style={styles.rateValue}>
-                {marketLoading ? "Yükleniyor..." : formatRateValue(marketData?.GRAM_ALTIN_TRY?.value)}
+                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(marketData?.GRAM_ALTIN_TRY?.value)}
               </Text>
             </View>
           </View>
@@ -743,7 +712,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           <View style={styles.sectionHeaderRow}>
             <View>
               <Text style={styles.cardTitle}>HESAPLARIM</Text>
-              <Text style={styles.cardSubtitle}>Banka ve nakit hesaplarin</Text>
+              <Text style={styles.cardSubtitle}>Banka ve nakit hesapların</Text>
             </View>
             <View style={styles.sectionBadge}>
               <Text style={styles.sectionBadgeText}>{accounts.length}</Text>
@@ -1188,3 +1157,4 @@ const styles = StyleSheet.create({
   cancelText: { color: "#94a3b8", fontWeight: "800" },
 
 });
+

@@ -72,6 +72,7 @@ export default function MessageBox({
             <TouchableOpacity
               style={[
                 styles.button,
+                styles.singleButton,
                 { backgroundColor: isSuccess ? "#22c55e" : "#ef4444" },
               ]}
               onPress={onClose}
@@ -124,6 +125,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
+  },
+  singleButton: {
+    marginTop: 6,
   },
   buttonText: {
     color: "#ffffff",

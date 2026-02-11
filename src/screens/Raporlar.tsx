@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import api from "../config/api";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import { generatePDF } from "react-native-html-to-pdf";
 import RNFS from "react-native-fs";
+import MessageBox from "../components/MessageBox";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Raporlar">;
 
@@ -89,6 +89,9 @@ export default function RaporlarScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [activeMonth, setActiveMonth] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [pdfMessageOpen, setPdfMessageOpen] = useState(false);
+  const [pdfMessageText, setPdfMessageText] = useState("");
+  const [pdfMessageType, setPdfMessageType] = useState<"success" | "error" | "info">("success");
 
   const fetchAll = useCallback(async () => {
     try {
@@ -212,104 +215,120 @@ export default function RaporlarScreen({ navigation }: Props) {
           await RNFS.unlink(targetPath);
         }
         await RNFS.moveFile(result.filePath, targetPath);
-        Alert.alert("PDF hazir", `Dosya kaydedildi: ${targetPath}`);
+        setPdfMessageType("success");
+        setPdfMessageText(`PDF kaydedildi: ${targetPath}`);
+        setPdfMessageOpen(true);
       } else {
-        Alert.alert("PDF olusturulamadı", "Dosya yolu alinmadi.");
+        setPdfMessageType("error");
+        setPdfMessageText("PDF olusturulamadı. Dosya yolu alinmadi.");
+        setPdfMessageOpen(true);
       }
     } catch (e: any) {
       console.log("PDF hata:", e?.message);
-      Alert.alert("PDF olusturulamadı", "Lutfen tekrar deneyin.");
+      setPdfMessageType("error");
+      setPdfMessageText("PDF olusturulamadı. Lutfen tekrar deneyin.");
+      setPdfMessageOpen(true);
     } finally {
       setDownloading(false);
     }
   }, [buildPdfHtml]);
 
   return (
-    <View style={styles.container}>
-      <ScreenHeader
-        title="Raporlar"
-        subtitle="Ozet ve analiz"
-        left={
-          <HeaderAction
-            label="Geri"
-            icon={<Ionicons name="chevron-back" size={16} color="#e5e7eb" />}
-            onPress={() => navigation.goBack()}
-          />
-        }
-      />
-
-      {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color="#facc15" />
-          <Text style={styles.loadingText}>Yukleniyor...</Text>
-        </View>
-      ) : (
-        <>
-          {!!error && <Text style={styles.errorText}>{error}</Text>}
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Takvim</Text>
-            <FlatList
-              data={months}
-              keyExtractor={(item) => item}
-              numColumns={3}
-              contentContainerStyle={styles.monthGrid}
-              columnWrapperStyle={styles.monthRow}
-              renderItem={({ item }) => {
-                const active = item === activeMonth;
-                const rowsData = monthItemsMap.get(item) ?? [];
-                const count = rowsData.length;
-                return (
-                  <View
-                    style={[
-                      styles.monthCell,
-                      active && styles.monthCellActive,
-                      count === 0 && styles.monthCellEmpty,
-                    ]}
-                  >
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (count === 0) return;
-                        setActiveMonth(item);
-                      }}
-                      activeOpacity={0.85}
-                      style={styles.monthCellPress}
-                      disabled={count === 0}
-                    >
-                      <Text
-                        style={[
-                          styles.monthLabel,
-                          active && styles.monthLabelActive,
-                          count === 0 && styles.monthLabelEmpty,
-                        ]}
-                      >
-                        {monthLabelShort(item)}
-                      </Text>
-                      {count > 0 ? (
-                        <Text style={styles.monthCount}>{count} islem</Text>
-                      ) : (
-                        <Text style={styles.monthEmptyText}>Bos</Text>
-                      )}
-                    </TouchableOpacity>
-                    {count > 0 ? (
-                      <TouchableOpacity
-                        style={styles.monthDownload}
-                        onPress={() => downloadPdfForMonth(item, rowsData)}
-                        activeOpacity={0.8}
-                        disabled={downloading}
-                      >
-                        <Ionicons name="download-outline" size={14} color="#0b0f1a" />
-                        <Text style={styles.monthDownloadText}>PDF</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                );
-              }}
+    <>
+      <View style={styles.container}>
+        <ScreenHeader
+          title="Raporlar"
+          subtitle="Ozet ve analiz"
+          left={
+            <HeaderAction
+              label="Geri"
+              icon={<Ionicons name="chevron-back" size={16} color="#e5e7eb" />}
+              onPress={() => navigation.goBack()}
             />
+          }
+        />
+
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator color="#facc15" />
+            <Text style={styles.loadingText}>Yukleniyor...</Text>
           </View>
-        </>
-      )}
-    </View>
+        ) : (
+          <>
+            {!!error && <Text style={styles.errorText}>{error}</Text>}
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Takvim</Text>
+              <FlatList
+                data={months}
+                keyExtractor={(item) => item}
+                numColumns={3}
+                contentContainerStyle={styles.monthGrid}
+                columnWrapperStyle={styles.monthRow}
+                renderItem={({ item }) => {
+                  const active = item === activeMonth;
+                  const rowsData = monthItemsMap.get(item) ?? [];
+                  const count = rowsData.length;
+                  return (
+                    <View
+                      style={[
+                        styles.monthCell,
+                        active && styles.monthCellActive,
+                        count === 0 && styles.monthCellEmpty,
+                      ]}
+                    >
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (count === 0) return;
+                          setActiveMonth(item);
+                        }}
+                        activeOpacity={0.85}
+                        style={styles.monthCellPress}
+                        disabled={count === 0}
+                      >
+                        <Text
+                          style={[
+                            styles.monthLabel,
+                            active && styles.monthLabelActive,
+                            count === 0 && styles.monthLabelEmpty,
+                          ]}
+                        >
+                          {monthLabelShort(item)}
+                        </Text>
+                        {count > 0 ? (
+                          <Text style={styles.monthCount}>{count} islem</Text>
+                        ) : (
+                          <Text style={styles.monthEmptyText}>Bos</Text>
+                        )}
+                      </TouchableOpacity>
+                      {count > 0 ? (
+                        <TouchableOpacity
+                          style={styles.monthDownload}
+                          onPress={() => downloadPdfForMonth(item, rowsData)}
+                          activeOpacity={0.8}
+                          disabled={downloading}
+                        >
+                          <Ionicons name="download-outline" size={14} color="#0b0f1a" />
+                          <Text style={styles.monthDownloadText}>PDF</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  );
+                }}
+              />
+            </View>
+          </>
+        )}
+      </View>
+      <MessageBox
+        visible={pdfMessageOpen}
+        title={pdfMessageType === "success" ? "PDF Hazir" : "Hata"}
+        message={pdfMessageText}
+        type={pdfMessageType === "success" ? "success" : "error"}
+        onClose={() => setPdfMessageOpen(false)}
+        confirmText="Tamam"
+      />
+    </>
   );
 }
 

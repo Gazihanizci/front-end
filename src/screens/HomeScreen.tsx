@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState, useCallback } from "react";
-import api from "../config/api";
+import api, { BASE_URL } from "../config/api";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App"; // 🔴 yolu projene göre kontrol et
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
@@ -94,6 +94,27 @@ export default function HomeScreen({ navigation }: Props) {
     });
   const formatRateValue = (n?: number) =>
     Number.isFinite(n) ? `₺ ${formatTRY(n as number)}` : "—";
+  const marketBaseUrl = useMemo(() => {
+    const raw = String(BASE_URL || "").trim();
+    const match = raw.match(/^(https?:)\/\/([^:/]+)/i);
+    if (match) {
+      const protocol = match[1];
+      const host = match[2];
+      return `${protocol}//${host}:8090`;
+    }
+    return "http://127.0.0.1:8090";
+  }, []);
+  const getRate = useCallback(
+    (keys: string[]) => {
+      if (!marketData) return undefined;
+      for (const k of keys) {
+        const val = marketData[k]?.value;
+        if (Number.isFinite(val)) return val;
+      }
+      return undefined;
+    },
+    [marketData]
+  );
 
   const monthShort = (yilAy: string) => {
     const parts = String(yilAy).split("-");
@@ -240,7 +261,7 @@ export default function HomeScreen({ navigation }: Props) {
   const fetchMarket = useCallback(async () => {
   setMarketLoading(true);
   try {
-    const res = await api.get("http://192.168.234.156:8090/api/market/latest");
+    const res = await api.get(`${marketBaseUrl}/api/market/latest`);
     const payload: MarketLatestResponse = res.data;
     if (payload?.ok && payload?.data) {
       setMarketData(payload.data);
@@ -257,7 +278,7 @@ export default function HomeScreen({ navigation }: Props) {
   } finally {
     setMarketLoading(false);
   }
-}, []);
+}, [marketBaseUrl]);
   const fetchCategorySummaryMonthly = useCallback(async () => {
   setLoadingCategorySummary(true);
   try {
@@ -437,7 +458,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title="Bizim İşletme"
+        title="CÜZDAN"
         subtitle={
           loadingUserInfo
             ? "YÜKLENİYOR..."
@@ -647,9 +668,6 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
               {!!marketUpdatedAt && (
                 <Text style={styles.cardSubtitle}>Son güncelleme: {marketUpdatedAt}</Text>
               )}
-              {!!marketSource && (
-                <Text style={styles.cardSubtitle}>Kaynak: {marketSource}</Text>
-              )}
             </View>
             <View style={styles.sectionBadge}>
               <Text style={styles.sectionBadgeText}>Anlık</Text>
@@ -665,7 +683,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 <Text style={styles.rateCode}>Dolar / TL</Text>
               </View>
               <Text style={styles.rateValue}>
-                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(marketData?.USDTRY?.value)}
+                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(getRate(["USDTRY", "USD/TRY", "USD_TRY"]))}
               </Text>
             </View>
 
@@ -677,7 +695,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 <Text style={styles.rateCode}>Euro / TL</Text>
               </View>
               <Text style={styles.rateValue}>
-                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(marketData?.EURTRY?.value)}
+                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(getRate(["EURTRY", "EUR/TRY", "EUR_TRY"]))}
               </Text>
             </View>
 
@@ -689,7 +707,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 <Text style={styles.rateCode}>Sterlin / TL</Text>
               </View>
               <Text style={styles.rateValue}>
-                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(marketData?.GBPTRY?.value)}
+                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(getRate(["GBPTRY", "GBP/TRY", "GBP_TRY"]))}
               </Text>
             </View>
 
@@ -701,7 +719,17 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 <Text style={styles.rateCode}>Gram Altın</Text>
               </View>
               <Text style={styles.rateValue}>
-                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(marketData?.GRAM_ALTIN_TRY?.value)}
+                {marketLoading
+                  ? "YÜKLENİYOR..."
+                  : formatRateValue(
+                      getRate([
+                        "GRAM_ALTIN_TRY",
+                        "GRAM_ALTIN",
+                        "GRAM/TRY",
+                        "XAU_TRY",
+                        "XAUTRY",
+                      ])
+                    )}
               </Text>
             </View>
           </View>

@@ -710,26 +710,34 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
                 </View>
               </View>
 
-              <View style={styles.categoryList}>
-                {giderItems.slice(0, 5).map((item, index) => (
-                  <View key={item.kategoriId} style={styles.categoryRow}>
-                    <View
-                      style={[
-                        styles.categoryBadge,
-                        { backgroundColor: expensePalette[index % expensePalette.length] },
-                      ]}
-                    >
-                      <Text style={styles.categoryBadgeText}>{item.kategoriAd?.[0]?.toUpperCase() ?? "?"}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.categoryName} numberOfLines={1}>
-                        {item.kategoriAd}
-                      </Text>
-                      <Text style={styles.categoryAmount}>₺ {formatTRY(item.toplamTutar)}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
+<ScrollView
+  style={styles.giderCategoryList}
+  contentContainerStyle={styles.giderCategoryListContent}
+  showsVerticalScrollIndicator={false}
+  nestedScrollEnabled
+>
+  {giderItems.map((item, index) => (
+    <View key={item.kategoriId} style={styles.categoryRow}>
+      <View
+        style={[
+          styles.categoryBadge,
+          { backgroundColor: expensePalette[index % expensePalette.length] },
+        ]}
+      >
+        <Text style={styles.categoryBadgeText}>
+          {item.kategoriAd?.[0]?.toUpperCase() ?? "?"}
+        </Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.categoryName} numberOfLines={1}>
+          {item.kategoriAd}
+        </Text>
+        <Text style={styles.categoryAmount}>₺ {formatTRY(item.toplamTutar)}</Text>
+      </View>
+    </View>
+  ))}
+</ScrollView>
+
             </View>
           )}
         </View>
@@ -746,18 +754,19 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
             </View>
           </View>
 
-          {!memberCategoryHasExpense ? (
-            <Text style={styles.emptyText}>Bu ay üye harcaması yok</Text>
-          ) : (
-            <FlatList
-              horizontal
-              data={memberCategoryGroups}
-              keyExtractor={(item) => String(item.kullaniciId)}
-              renderItem={renderMemberCategoryCard}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.memberScrollContent}
-            />
-          )}
+{!memberCategoryHasExpense ? (
+  <Text style={styles.emptyText}>Bu ay üye harcaması yok</Text>
+) : (
+  <FlatList
+    data={memberCategoryGroups.filter((m) => (m.total || 0) > 0)}
+    keyExtractor={(x) => String(x.kullaniciId)}
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.memberScrollContent}
+    renderItem={renderMemberCategoryCard}
+  />
+)}
+
         </View>
       </ScrollView>
     </View>
@@ -895,6 +904,8 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   categoryList: { flex: 1, gap: 10, justifyContent: "center" },
+  giderCategoryList: { flex: 1, maxHeight: 170 },
+  giderCategoryListContent: { gap: 10, paddingVertical: 2 },
   categoryRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   categoryBadge: {
     width: 26,
@@ -946,3 +957,4 @@ const styles = StyleSheet.create({
   loadingText: { color: "#94a3b8", fontSize: 12, fontWeight: "700" },
   emptyText: { color: "#94a3b8", fontSize: 12, fontWeight: "700", marginTop: 10 },
 });
+

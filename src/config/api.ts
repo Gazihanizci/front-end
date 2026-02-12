@@ -33,7 +33,8 @@ api.interceptors.response.use(
     const url: string = error?.config?.url ?? "";
     const skipLogout =
       url.includes("/api/ailekatil") ||
-      url.includes("/api/aileler/katil");
+      url.includes("/api/aileler/katil") ||
+      url.includes("/api/ozelislemler");
     if (status === 401 && !skipLogout) {
       await clearToken();
       await clearProfile();

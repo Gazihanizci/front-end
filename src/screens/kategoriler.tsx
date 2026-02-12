@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -11,11 +11,13 @@ import {
 import { ActivityIndicator } from "react-native";
 import api from "../config/api";
 import ScreenHeader from "../components/ScreenHeader";
+import MessageBox from "../components/MessageBox";
 
 type Kategori = {
   id: number;
   ad: string;
   tip: "GIDER" | "GELIR";
+  source?: "STANDARD" | "CUSTOM";
 };
 
 const ICONS: Record<string, string> = {
@@ -60,15 +62,67 @@ export default function Kategoriler() {
   const [selected, setSelected] = useState<Kategori | null>(null);
   const [amountVisible, setAmountVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [createVisible, setCreateVisible] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState<"GIDER" | "GELIR">("GIDER");
+  const [customCategories, setCustomCategories] = useState<Kategori[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [msgVisible, setMsgVisible] = useState(false);
+  const [msgText, setMsgText] = useState("");
+  const [msgType, setMsgType] = useState<"success" | "error" | "info">("info");
+  const [loadingCustom, setLoadingCustom] = useState(false);
+  const [userInfo, setUserInfo] = useState<{ aileId: number | null } | null>(null);
+
+  const fetchCustomCategories = useCallback(async () => {
+    setLoadingCustom(true);
+    try {
+      const res = await api.get("/api/ozel-kategori");
+      const arr = Array.isArray(res.data) ? res.data : [];
+      const normalized: Kategori[] = arr.map((x: any) => ({
+        id: Number(x.ozelKategoriId ?? x.id),
+        ad: String(x.ad ?? ""),
+        tip: x.tip === "GELIR" ? "GELIR" : "GIDER",
+        source: "CUSTOM",
+      }));
+      setCustomCategories(normalized);
+    } catch (e: any) {
+      console.log("ozel kategori listeleme hata:", e?.response?.data || e?.message);
+      setCustomCategories([]);
+    } finally {
+      setLoadingCustom(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCustomCategories();
+  }, [fetchCustomCategories]);
+
+  const fetchUserInfo = useCallback(async () => {
+    try {
+      const res = await api.get("/api/userinfo");
+      setUserInfo({ aileId: res?.data?.aileId ?? null });
+    } catch (e: any) {
+      console.log("userinfo hata:", e?.response?.data || e?.message);
+      setUserInfo(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUserInfo();
+  }, [fetchUserInfo]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return DATA.filter((k) => {
+    const all = [
+      ...DATA.map((k) => ({ ...k, source: "STANDARD" as const })),
+      ...customCategories,
+    ];
+    return all.filter((k) => {
       const okTab = tab === "HEPSI" ? true : k.tip === tab;
       const okQ = q ? k.ad.toLowerCase().includes(q) : true;
       return okTab && okQ;
     });
-  }, [query, tab]);
+  }, [query, tab, customCategories]);
   const parseTrMoney = (s: string) => {
   // "1.500,25" -> 1500.25  | "1500" -> 1500
   const cleaned = s.trim().replace(/\./g, "").replace(",", ".");
@@ -86,28 +140,55 @@ const createIslem = async () => {
 
   setSaving(true);
   try {
-    const res = await api.post("/api/islemler", {
-        kategoriId: selected.id,
-        tutar: tutarNum,
-        aciklama: description?.trim() || null,
-      });
-
-    if (!res || !res.data) {
-      // no-op, axios throws on non-2xx
-    }
+    const isStandard = DATA.some((k) => k.id === selected.id);
+    if (selected.source === "CUSTOM" || !isStandard) {
+      if (userInfo?.aileId == null) {
+        setMsgType("error");
+        setMsgText("Aile bilgisi bulunamadı. Özel işlem oluşturulamadı.");
+        setMsgVisible(true);
+        return;
+        }
+        await api.post("/api/ozelislemler", {
+          aileId: userInfo.aileId,
+          ozelKategoriId: selected.id,
+          tutar: tutarNum,
+          paraBirimi: "TL",
+          islemTarihi: new Date().toISOString(),
+          aciklama: description?.trim() || null,
+        });
+      } else {
+        await api.post("/api/islemler", {
+          kategoriId: selected.id,
+          tutar: tutarNum,
+          aciklama: description?.trim() || null,
+        });
+      }
 
     // ✅ başarılı
     setAmountVisible(false);
     setSelected(null);
     setAmount("");
     setDescription("");
+    setMsgType("success");
+    setMsgText("İşlem kaydedildi.");
+    setMsgVisible(true);
   } catch (e: any) {
     // burada MessageBox açabilirsin
-    console.log("islem create hata:", e?.message || e);
-  } finally {
-    setSaving(false);
-  }
-};
+    const msg =
+      e?.response?.data?.message ||
+      e?.response?.data?.error ||
+      e?.response?.data?.detail ||
+      e?.response?.data ||
+      e?.message ||
+      "İşlem oluşturulamadı.";
+    console.log("islem create hata:", msg);
+    setMsgType("error");
+    setMsgText(String(msg));
+    setMsgVisible(true);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <View style={styles.screen}>
@@ -145,12 +226,17 @@ const createIslem = async () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.list}>
-        {filtered.map((k) => {
+        {loadingCustom && (
+          <Text style={{ color: "#94a3b8", fontSize: 12, fontWeight: "700" }}>
+            Özel kategoriler yükleniyor...
+          </Text>
+        )}
+        {filtered.map((k, idx) => {
           const isGider = k.tip === "GIDER";
           const icon = ICONS[k.ad] ?? (isGider ? "💸" : "💵");
-            return (
+          return (
              <TouchableOpacity
-               key={k.id}
+               key={`${k.source ?? "STANDARD"}-${k.id}-${k.ad}-${k.tip}-${idx}`}
                style={styles.card}
                activeOpacity={0.8}
                onPress={() => {
@@ -227,6 +313,107 @@ const createIslem = async () => {
           </View>
         </View>
       </Modal>
+
+      {/* NEW CATEGORY MODAL (UI only) */}
+      <Modal visible={createVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Yeni Kategori</Text>
+            <Text style={styles.sheetSubTitle}>Kategori adı ve türünü seç</Text>
+
+            <TextInput
+              value={newName}
+              onChangeText={setNewName}
+              placeholder="Kategori adı (örn: Evcil Hayvan)"
+              placeholderTextColor="#9ca3af"
+              style={styles.input}
+            />
+
+            <View style={styles.typeRow}>
+              {(["GIDER", "GELIR"] as const).map((t) => {
+                const active = newType === t;
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.typeBtn, active && styles.typeBtnActive]}
+                    onPress={() => setNewType(t)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.typeBtnText, active && styles.typeBtnTextActive]}>
+                      {t}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, (!newName.trim() || creating) && { opacity: 0.6 }]}
+              disabled={!newName.trim() || creating}
+              onPress={async () => {
+                if (creating) return;
+                const name = newName.trim();
+                if (!name) return;
+                setCreating(true);
+                try {
+                  await api.post("/api/ozel-kategori", {
+                    ad: name,
+                    tip: newType,
+                  });
+                  await fetchCustomCategories();
+                  setCreateVisible(false);
+                  setNewName("");
+                  setNewType("GIDER");
+                  setMsgType("success");
+                  setMsgText("Kategori oluşturuldu.");
+                  setMsgVisible(true);
+                } catch (e: any) {
+                  const msg =
+                    e?.response?.data?.message ||
+                    e?.response?.data?.error ||
+                    e?.response?.data?.detail ||
+                    e?.response?.data ||
+                    e?.message ||
+                    "Kategori oluşturulamadı.";
+                  console.log("ozel kategori create hata:", msg);
+                  setMsgType("error");
+                  setMsgText(String(msg));
+                  setMsgVisible(true);
+                } finally {
+                  setCreating(false);
+                }
+              }}
+            >
+              {creating ? (
+                <ActivityIndicator color="#0b0f1a" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Oluştur</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setCreateVisible(false)}
+              disabled={saving}
+            >
+              <Text style={styles.cancelText}>Vazgeç</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Floating + Button */}
+      <TouchableOpacity style={styles.fab} onPress={() => setCreateVisible(true)} activeOpacity={0.9}>
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
+      <MessageBox
+        visible={msgVisible}
+        title={msgType === "success" ? "Başarılı" : msgType === "error" ? "Hata" : "Bilgi"}
+        message={msgText}
+        type={msgType}
+        onClose={() => setMsgVisible(false)}
+        confirmText="Tamam"
+      />
     </View>
   );
 }
@@ -380,4 +567,36 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: "#0b0f1a", fontWeight: "900" },
   cancelBtn: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
   cancelText: { color: "#94a3b8", fontWeight: "800" },
+  typeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  typeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.25)",
+    backgroundColor: "rgba(148,163,184,0.08)",
+    alignItems: "center",
+  },
+  typeBtnActive: {
+    backgroundColor: "#facc15",
+    borderColor: "#facc15",
+  },
+  typeBtnText: { color: "#cbd5e1", fontWeight: "800", fontSize: 12 },
+  typeBtnTextActive: { color: "#0b0f1a" },
+  fab: {
+    position: "absolute",
+    right: 18,
+    bottom: 18,
+    width: 56,
+    height: 56,
+    borderRadius: 56,
+    backgroundColor: "#facc15",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fabText: { color: "#0b0f1a", fontSize: 28, fontWeight: "900", marginTop: -2 },
 });

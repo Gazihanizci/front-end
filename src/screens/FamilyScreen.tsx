@@ -41,6 +41,14 @@ export default function FamilyAccountScreen({ navigation }: Props) {
   const [loggedInUserId, setLoggedInUserId] = useState<number | null>(null);
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false);
   const [removeTargetId, setRemoveTargetId] = useState<number | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveConfirmVisible, setLeaveConfirmVisible] = useState(false);
+  const [transferModalVisible, setTransferModalVisible] = useState(false);
+  const [selectedNewOwnerId, setSelectedNewOwnerId] = useState<number | null>(null);
+  const [leaveErrorVisible, setLeaveErrorVisible] = useState(false);
+  const [leaveErrorText, setLeaveErrorText] = useState("");
+  const [createErrorVisible, setCreateErrorVisible] = useState(false);
+  const [createErrorText, setCreateErrorText] = useState("");
 
 
   // Modal states
@@ -214,7 +222,16 @@ useEffect(() => {
       setCreateModal(false);
       await refetchFamily();
     } catch (err: any) {
-      console.log("Aile oluşturma hata:", err?.response?.data || err?.message);
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.response?.data?.detail ||
+        err?.response?.data ||
+        err?.message ||
+        "Aile oluşturma başarısız.";
+      console.log("Aile oluşturma hata:", msg);
+      setCreateErrorText(String(msg));
+      setCreateErrorVisible(true);
     } finally {
       setSaving(false);
     }
@@ -270,6 +287,47 @@ useEffect(() => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const leaveFamily = async (newOwnerUserId?: number) => {
+    if (leaving || !familyInfo?.aileId) return;
+    setLeaving(true);
+    try {
+      if (newOwnerUserId) {
+        await api.post(
+          `/api/aileler/${familyInfo.aileId}/sahiplik-devret/${newOwnerUserId}`
+        );
+      }
+      await api.post(`/api/aileler/${familyInfo.aileId}/ayril`);
+      await fetchFamilyInfo();
+      await refetchFamily();
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.response?.data?.detail ||
+        err?.response?.data ||
+        err?.message ||
+        "Aileden ayrılma başarısız.";
+      console.log("Aileden ayrilma hata:", msg);
+      setLeaveErrorText(String(msg));
+      setLeaveErrorVisible(true);
+    } finally {
+      setLeaving(false);
+    }
+  };
+
+  const startLeaveFlow = () => {
+    if (!hasFamily || !familyInfo?.aileId) return;
+    if (familyOwnerUserId != null && loggedInUserId != null && familyOwnerUserId === loggedInUserId) {
+      const otherMembers = members.filter((m) => m.id !== loggedInUserId);
+      if (otherMembers.length > 0) {
+        setSelectedNewOwnerId(otherMembers[0]?.id ?? null);
+        setTransferModalVisible(true);
+        return;
+      }
+    }
+    setLeaveConfirmVisible(true);
   };
 
   // =========================
@@ -379,11 +437,13 @@ useEffect(() => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionRow}
+            style={[styles.actionRow, hasFamily && { opacity: 0.5 }]}
             onPress={() => {
+              if (hasFamily) return;
               setJoinError("");
               setJoinModal(true);
             }}
+            disabled={hasFamily}
           >
             <View>
               <Text style={styles.actionTitle}>Aileye Katıl</Text>
@@ -391,6 +451,21 @@ useEffect(() => {
             </View>
             <Text style={styles.actionIcon}>↗</Text>
           </TouchableOpacity>
+
+          {hasFamily && (
+            <TouchableOpacity
+              style={[styles.actionRow, leaving && { opacity: 0.6 }]}
+              onPress={startLeaveFlow}
+              activeOpacity={0.8}
+              disabled={leaving}
+            >
+              <View>
+                <Text style={styles.actionTitle}>Aileden Çık</Text>
+                <Text style={styles.actionSub}>Mevcut aile üyeliğini sonlandır</Text>
+              </View>
+              <Text style={styles.actionIcon}>←</Text>
+            </TouchableOpacity>
+          )}
         </View>
           </>
         ) : (
@@ -556,6 +631,69 @@ useEffect(() => {
         </View>
       </Modal>
 
+      {/* TRANSFER OWNERSHIP MODAL */}
+      <Modal visible={transferModalVisible} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Sahipliği Devret</Text>
+            <Text style={styles.helperText}>Önce yeni aile sahibini seç.</Text>
+
+            <ScrollView contentContainerStyle={{ gap: 10 }}>
+              {members
+                .filter((m) => m.id !== loggedInUserId)
+                .map((m) => {
+                  const selected = selectedNewOwnerId === m.id;
+                  return (
+                    <TouchableOpacity
+                      key={m.id}
+                      style={[
+                        styles.memberPickRow,
+                        selected && styles.memberPickRowActive,
+                      ]}
+                      onPress={() => setSelectedNewOwnerId(m.id)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.memberPickAvatar}>
+                        <Text style={styles.memberPickAvatarText}>
+                          {m.ad?.[0]?.toUpperCase() ?? "?"}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.memberPickName}>{`${m.ad} ${m.soyad}`.trim()}</Text>
+                        <Text style={styles.memberPickSub}>{m.email}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, (!selectedNewOwnerId || leaving) && { opacity: 0.6 }]}
+              onPress={async () => {
+                if (!selectedNewOwnerId) return;
+                setTransferModalVisible(false);
+                await leaveFamily(selectedNewOwnerId);
+              }}
+              disabled={!selectedNewOwnerId || leaving}
+            >
+              {leaving ? (
+                <ActivityIndicator color="#000" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Devret ve Çık</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setTransferModalVisible(false)}
+              disabled={leaving}
+            >
+              <Text style={styles.cancelText}>Vazgeç</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <MessageBox
         visible={removeConfirmVisible}
         title="Aileden Çıkar"
@@ -566,6 +704,36 @@ useEffect(() => {
         onConfirm={confirmRemove}
         confirmText="Çıkar"
         cancelText="Vazgeç"
+      />
+      <MessageBox
+        visible={leaveConfirmVisible}
+        title="Aileden Çık"
+        message="Çıkmak istediğinizden emin misiniz?"
+        type="error"
+        onClose={() => setLeaveConfirmVisible(false)}
+        onCancel={() => setLeaveConfirmVisible(false)}
+        onConfirm={async () => {
+          setLeaveConfirmVisible(false);
+          await leaveFamily();
+        }}
+        confirmText="Çık"
+        cancelText="Vazgeç"
+      />
+      <MessageBox
+        visible={leaveErrorVisible}
+        title="Aileden Ayrılma Hatası"
+        message={leaveErrorText || "Aileden ayrılma başarısız."}
+        type="error"
+        onClose={() => setLeaveErrorVisible(false)}
+        confirmText="Tamam"
+      />
+      <MessageBox
+        visible={createErrorVisible}
+        title="Aile Oluşturma Hatası"
+        message={createErrorText || "Aile oluşturma başarısız."}
+        type="error"
+        onClose={() => setCreateErrorVisible(false)}
+        confirmText="Tamam"
       />
     </View>
   );
@@ -738,6 +906,31 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   removeBtnText: { color: "#0b0f1a", fontSize: 12, fontWeight: "900" },
+  memberPickRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "rgba(148,163,184,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.18)",
+  },
+  memberPickRowActive: {
+    borderColor: "#facc15",
+    backgroundColor: "rgba(250,204,21,0.12)",
+  },
+  memberPickAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#facc15",
+  },
+  memberPickAvatarText: { color: "#0b0f1a", fontSize: 14, fontWeight: "900" },
+  memberPickName: { color: "#e5e7eb", fontSize: 13, fontWeight: "800" },
+  memberPickSub: { color: "#94a3b8", fontSize: 11, marginTop: 2, fontWeight: "700" },
 
 
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },

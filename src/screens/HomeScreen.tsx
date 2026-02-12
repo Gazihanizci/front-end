@@ -265,16 +265,12 @@ export default function HomeScreen({ navigation }: Props) {
     const payload: MarketLatestResponse = res.data;
     if (payload?.ok && payload?.data) {
       setMarketData(payload.data);
-    } else {
-      setMarketData(null);
+      setMarketTs(Number(payload?.ts) || null);
+      setMarketSource(payload?.source ?? null);
     }
-    setMarketTs(Number(payload?.ts) || null);
-    setMarketSource(payload?.source ?? null);
   } catch (err: any) {
     console.log("Market latest hata:", err?.response?.data || err?.message);
-    setMarketData(null);
-    setMarketTs(null);
-    setMarketSource(null);
+    // Hata olursa mevcut veriyi koru; son güncelleme boş kalmasın
   } finally {
     setMarketLoading(false);
   }
@@ -458,7 +454,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title="CÜZDAN"
+        title="CÜZDAN "
         subtitle={
           loadingUserInfo
             ? "YÜKLENİYOR..."

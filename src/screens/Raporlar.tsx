@@ -33,8 +33,38 @@ type IslemRaw = {
   paraBirimi?: string;
 };
 
+type FamilyWalletResponse = {
+  aileId: number;
+  yilAy: string;
+  aileToplamGelir: number | string;
+  aileToplamGider: number | string;
+  aileNet: number | string;
+  uyelerAylik: {
+    kullaniciId: number;
+    adSoyad: string;
+    aylikGelir: number | string;
+    aylikGider: number | string;
+    net: number | string;
+  }[];
+  kategoriOzet: {
+    kategoriId: number;
+    kategoriAd: string;
+    tip: "GELIR" | "GIDER";
+    toplamTutar: number | string;
+  }[];
+};
+
 const toNumber = (value: number | string | undefined | null) => {
   if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const num = Number(value.replace(",", "."));
+    return Number.isFinite(num) ? num : 0;
+  }
+  return 0;
+};
+
+const toNum = (value: number | string | undefined | null) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (typeof value === "string") {
     const num = Number(value.replace(",", "."));
     return Number.isFinite(num) ? num : 0;
@@ -92,6 +122,10 @@ export default function RaporlarScreen({ navigation }: Props) {
   const [pdfMessageOpen, setPdfMessageOpen] = useState(false);
   const [pdfMessageText, setPdfMessageText] = useState("");
   const [pdfMessageType, setPdfMessageType] = useState<"success" | "error" | "info">("success");
+  const [downloadModalVisible, setDownloadModalVisible] = useState(false);
+  const [downloadMonth, setDownloadMonth] = useState<string | null>(null);
+  const [familyMonthData, setFamilyMonthData] = useState<FamilyWalletResponse | null>(null);
+  const [familyLoading, setFamilyLoading] = useState(false);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -233,6 +267,239 @@ export default function RaporlarScreen({ navigation }: Props) {
     }
   }, [buildPdfHtml]);
 
+  const buildFamilyPdfHtml = useCallback((monthKey: string, data: FamilyWalletResponse) => {
+    const title = monthLabel(monthKey);
+    const gelir = toNum(data.aileToplamGelir);
+    const gider = toNum(data.aileToplamGider);
+    const net = toNum(data.aileNet);
+
+    const memberRows = (data.uyelerAylik || [])
+      .map((m) => {
+        return `<tr>
+          <td>${escapeHtml(m.adSoyad ?? "-")}</td>
+          <td style="text-align:right;">${formatTRY(Math.abs(toNum(m.aylikGelir)))}</td>
+          <td style="text-align:right;">${formatTRY(Math.abs(toNum(m.aylikGider)))}</td>
+          <td style="text-align:right;">${formatTRY(toNum(m.net))}</td>
+        </tr>`;
+      })
+      .join("");
+
+    const kategoriRows = (data.kategoriOzet || [])
+      .map((k) => {
+        return `<tr>
+          <td>${escapeHtml(k.kategoriAd ?? "-")}</td>
+          <td>${escapeHtml(k.tip ?? "-")}</td>
+          <td style="text-align:right;">${formatTRY(Math.abs(toNum(k.toplamTutar)))}</td>
+        </tr>`;
+      })
+      .join("");
+
+    return `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+            h1 { font-size: 20px; margin: 0 0 8px; }
+            h2 { font-size: 14px; margin: 16px 0 8px; }
+            .summary { margin: 12px 0 18px; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th, td { border: 1px solid #e2e8f0; padding: 6px 8px; }
+            th { background: #f1f5f9; text-align: left; }
+          </style>
+        </head>
+        <body>
+          <h1>${escapeHtml(title)} Aile Raporu</h1>
+          <div class="summary">
+            <div>Toplam Gelir: ${formatTRY(gelir)}</div>
+            <div>Toplam Gider: ${formatTRY(gider)}</div>
+            <div>Net: ${formatTRY(net)}</div>
+          </div>
+
+          <h2>Üyeler (Gelir / Gider / Net)</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Üye</th>
+                <th style="text-align:right;">Gelir</th>
+                <th style="text-align:right;">Gider</th>
+                <th style="text-align:right;">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${memberRows || `<tr><td colspan="4">Bu ay için üye verisi yok.</td></tr>`}
+            </tbody>
+          </table>
+
+          <h2>Kategori Özeti</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th>Tip</th>
+                <th style="text-align:right;">Tutar</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${kategoriRows || `<tr><td colspan="3">Bu ay için kategori verisi yok.</td></tr>`}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+  }, []);
+
+  const buildMemberPdfHtml = useCallback(
+    (monthKey: string, member: FamilyWalletResponse["uyelerAylik"][number]) => {
+      const title = monthLabel(monthKey);
+      const gelir = toNum(member.aylikGelir);
+      const gider = toNum(member.aylikGider);
+      const net = toNum(member.net);
+      return `
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+              h1 { font-size: 20px; margin: 0 0 8px; }
+              .summary { margin: 12px 0 18px; font-size: 12px; }
+              table { width: 100%; border-collapse: collapse; font-size: 12px; }
+              th, td { border: 1px solid #e2e8f0; padding: 6px 8px; }
+              th { background: #f1f5f9; text-align: left; }
+            </style>
+          </head>
+          <body>
+            <h1>${escapeHtml(title)} Üye Raporu</h1>
+            <div class="summary">
+              <div>Üye: ${escapeHtml(member.adSoyad ?? "-")}</div>
+              <div>Gelir: ${formatTRY(gelir)}</div>
+              <div>Gider: ${formatTRY(gider)}</div>
+              <div>Net: ${formatTRY(net)}</div>
+            </div>
+          </body>
+        </html>
+      `;
+    },
+    []
+  );
+
+  const downloadFamilyPdfForMonth = useCallback(
+    async (monthKey: string) => {
+      try {
+        setDownloading(true);
+        const res = await api.get<FamilyWalletResponse>("/api/familywallet/monthly", {
+          params: { yilAy: monthKey },
+        });
+        const data = res.data;
+        const fileName = `aile-rapor-${monthKey}`;
+        const html = buildFamilyPdfHtml(monthKey, data);
+        const result = await generatePDF({
+          html,
+          fileName,
+          base64: false,
+        });
+        if (result?.filePath) {
+          const targetPath = `${RNFS.DownloadDirectoryPath}/${fileName}.pdf`;
+          const exists = await RNFS.exists(targetPath);
+          if (exists) {
+            await RNFS.unlink(targetPath);
+          }
+          await RNFS.moveFile(result.filePath, targetPath);
+          setPdfMessageType("success");
+          setPdfMessageText(`Aile PDF kaydedildi: ${targetPath}`);
+          setPdfMessageOpen(true);
+        } else {
+          setPdfMessageType("error");
+          setPdfMessageText("Aile PDF olusturulamadı. Dosya yolu alinmadi.");
+          setPdfMessageOpen(true);
+        }
+      } catch (e: any) {
+        const msg =
+          e?.response?.data?.message ||
+          e?.response?.data?.error ||
+          e?.response?.data?.detail ||
+          e?.response?.data ||
+          e?.message ||
+          "Aile PDF olusturulamadı. Lutfen tekrar deneyin.";
+        console.log("Aile PDF hata:", msg);
+        setPdfMessageType("error");
+        setPdfMessageText(String(msg));
+        setPdfMessageOpen(true);
+      } finally {
+        setDownloading(false);
+      }
+    },
+    [buildFamilyPdfHtml]
+  );
+
+  const downloadMemberPdfForMonth = useCallback(
+    async (monthKey: string, member: FamilyWalletResponse["uyelerAylik"][number]) => {
+      try {
+        setDownloading(true);
+        const safeName = String(member.adSoyad || "uye")
+          .trim()
+          .replace(/\s+/g, "-")
+          .toLowerCase();
+        const fileName = `uye-rapor-${monthKey}-${safeName}`;
+        const html = buildMemberPdfHtml(monthKey, member);
+        const result = await generatePDF({
+          html,
+          fileName,
+          base64: false,
+        });
+        if (result?.filePath) {
+          const targetPath = `${RNFS.DownloadDirectoryPath}/${fileName}.pdf`;
+          const exists = await RNFS.exists(targetPath);
+          if (exists) {
+            await RNFS.unlink(targetPath);
+          }
+          await RNFS.moveFile(result.filePath, targetPath);
+          setPdfMessageType("success");
+          setPdfMessageText(`Üye PDF kaydedildi: ${targetPath}`);
+          setPdfMessageOpen(true);
+        } else {
+          setPdfMessageType("error");
+          setPdfMessageText("Üye PDF olusturulamadı. Dosya yolu alinmadi.");
+          setPdfMessageOpen(true);
+        }
+      } catch (e: any) {
+        const msg =
+          e?.response?.data?.message ||
+          e?.response?.data?.error ||
+          e?.response?.data?.detail ||
+          e?.response?.data ||
+          e?.message ||
+          "Üye PDF olusturulamadı. Lutfen tekrar deneyin.";
+        console.log("Üye PDF hata:", msg);
+        setPdfMessageType("error");
+        setPdfMessageText(String(msg));
+        setPdfMessageOpen(true);
+      } finally {
+        setDownloading(false);
+      }
+    },
+    [buildMemberPdfHtml]
+  );
+
+  const openDownloadModal = useCallback(
+    async (monthKey: string) => {
+      setDownloadMonth(monthKey);
+      setDownloadModalVisible(true);
+      setFamilyLoading(true);
+      try {
+        const res = await api.get<FamilyWalletResponse>("/api/familywallet/monthly", {
+          params: { yilAy: monthKey },
+        });
+        setFamilyMonthData(res.data);
+      } catch (e: any) {
+        setFamilyMonthData(null);
+      } finally {
+        setFamilyLoading(false);
+      }
+    },
+    []
+  );
+
   return (
     <>
       <View style={styles.container}>
@@ -281,6 +548,7 @@ export default function RaporlarScreen({ navigation }: Props) {
                         onPress={() => {
                           if (count === 0) return;
                           setActiveMonth(item);
+                          openDownloadModal(item);
                         }}
                         activeOpacity={0.85}
                         style={styles.monthCellPress}
@@ -301,17 +569,6 @@ export default function RaporlarScreen({ navigation }: Props) {
                           <Text style={styles.monthEmptyText}>Bos</Text>
                         )}
                       </TouchableOpacity>
-                      {count > 0 ? (
-                        <TouchableOpacity
-                          style={styles.monthDownload}
-                          onPress={() => downloadPdfForMonth(item, rowsData)}
-                          activeOpacity={0.8}
-                          disabled={downloading}
-                        >
-                          <Ionicons name="download-outline" size={14} color="#0b0f1a" />
-                          <Text style={styles.monthDownloadText}>PDF</Text>
-                        </TouchableOpacity>
-                      ) : null}
                     </View>
                   );
                 }}
@@ -328,6 +585,62 @@ export default function RaporlarScreen({ navigation }: Props) {
         onClose={() => setPdfMessageOpen(false)}
         confirmText="Tamam"
       />
+      {downloadModalVisible && downloadMonth ? (
+        <View style={styles.downloadSheet}>
+          <View style={styles.downloadSheetCard}>
+            <Text style={styles.downloadTitle}>PDF Seçimi</Text>
+            <Text style={styles.downloadSub}>
+              {monthLabel(downloadMonth)} için indirme seçeneğini seç.
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.downloadBtn, downloading && { opacity: 0.6 }]}
+              onPress={() => downloadPdfForMonth(downloadMonth, monthItemsMap.get(downloadMonth) ?? [])}
+              disabled={downloading}
+            >
+              <Ionicons name="download-outline" size={16} color="#0b0f1a" />
+              <Text style={styles.downloadBtnText}>Bireysel PDF</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.downloadBtnAlt, downloading && { opacity: 0.6 }]}
+              onPress={() => downloadFamilyPdfForMonth(downloadMonth)}
+              disabled={downloading}
+            >
+              <Ionicons name="people-outline" size={16} color="#0b0f1a" />
+              <Text style={styles.downloadBtnText}>Genel Aile PDF</Text>
+            </TouchableOpacity>
+
+            <View style={{ marginTop: 12 }}>
+              <Text style={styles.downloadSectionTitle}>Aile Üyeleri</Text>
+              {familyLoading ? (
+                <Text style={styles.downloadSub}>Yükleniyor...</Text>
+              ) : familyMonthData?.uyelerAylik?.length ? (
+                familyMonthData.uyelerAylik.map((m) => (
+                  <TouchableOpacity
+                    key={m.kullaniciId}
+                    style={[styles.memberDownloadRow, downloading && { opacity: 0.6 }]}
+                    onPress={() => downloadMemberPdfForMonth(downloadMonth, m)}
+                    disabled={downloading}
+                  >
+                    <Text style={styles.memberDownloadName}>{m.adSoyad}</Text>
+                    <Ionicons name="download-outline" size={14} color="#0b0f1a" />
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={styles.downloadSub}>Bu ay için aile verisi yok.</Text>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.downloadClose}
+              onPress={() => setDownloadModalVisible(false)}
+            >
+              <Text style={styles.downloadCloseText}>Kapat</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
     </>
   );
 }
@@ -396,5 +709,72 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignSelf: "flex-start",
   },
+  monthDownloadAlt: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#93c5fd",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+    marginTop: 6,
+  },
   monthDownloadText: { color: "#0b0f1a", fontSize: 11, fontWeight: "800" },
+  downloadSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    top: 0,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "flex-end",
+  },
+  downloadSheetCard: {
+    backgroundColor: "#0f172a",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.15)",
+  },
+  downloadTitle: { color: "#e5e7eb", fontSize: 16, fontWeight: "900" },
+  downloadSub: { color: "#94a3b8", fontSize: 12, marginTop: 6, fontWeight: "700" },
+  downloadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#facc15",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  downloadBtnAlt: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#93c5fd",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginTop: 10,
+  },
+  downloadBtnText: { color: "#0b0f1a", fontSize: 13, fontWeight: "900" },
+  downloadSectionTitle: { color: "#e5e7eb", fontSize: 13, fontWeight: "900" },
+  memberDownloadRow: {
+    marginTop: 8,
+    backgroundColor: "rgba(148,163,184,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.2)",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  memberDownloadName: { color: "#e5e7eb", fontSize: 12, fontWeight: "800" },
+  downloadClose: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
+  downloadCloseText: { color: "#94a3b8", fontWeight: "800" },
 });

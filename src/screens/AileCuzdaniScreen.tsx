@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -957,4 +957,3 @@ const styles = StyleSheet.create({
   loadingText: { color: "#94a3b8", fontSize: 12, fontWeight: "700" },
   emptyText: { color: "#94a3b8", fontSize: 12, fontWeight: "700", marginTop: 10 },
 });
-

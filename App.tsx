@@ -13,6 +13,8 @@ import IslemlerScreen from "./src/screens/IslemlerScreen";
 import AileCuzdaniScreen from "./src/screens/AileCuzdaniScreen";
 import TaksitOdemeScreen from "./src/screens/TaksitOdemeScreen";
 import RaporlarScreen from "./src/screens/Raporlar";
+import SabitOdemelerScreen from "./src/screens/sabit_odemeler";
+import BildirimlerScreen from "./src/screens/BildirimlerScreen";
 import { getToken, onAuthTokenChanged } from "./src/utils/authStorage";
 import { navigationRef } from "./src/navigation/navigationRef";
 
@@ -27,6 +29,8 @@ export type RootStackParamList = {
   AileCuzdani: undefined;
   TaksitOdeme: undefined;
   Raporlar: undefined;
+  SabitOdemeler: undefined;
+  Bildirimler: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -82,6 +86,8 @@ export default function App() {
             <Stack.Screen name="AileCuzdani" component={AileCuzdaniScreen} />
             <Stack.Screen name="TaksitOdeme" component={TaksitOdemeScreen} />
             <Stack.Screen name="Raporlar" component={RaporlarScreen} />
+            <Stack.Screen name="SabitOdemeler" component={SabitOdemelerScreen} />
+            <Stack.Screen name="Bildirimler" component={BildirimlerScreen} />
           </>
         )}
       </Stack.Navigator>

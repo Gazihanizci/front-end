@@ -63,7 +63,11 @@ export default function MenuScreen({ navigation }: Props) {
     },
     { title: "Kategoriler", icon: <Ionicons name="pricetag-outline" size={22} color="#38bdf8" />,onPress: () => navigation.navigate("Categories"), },
 
-    { title: "Sabit Ödemeler", icon: <Ionicons name="calendar-outline" size={22} color="#38bdf8" /> },
+    {
+      title: "Sabit Ödemeler",
+      icon: <Ionicons name="calendar-outline" size={22} color="#38bdf8" />,
+      onPress: () => navigation.navigate("SabitOdemeler"),
+    },
     {
       title: "Taksit Odemeleri",
       icon: <Ionicons name="card-outline" size={22} color="#38bdf8" />,
@@ -176,7 +180,11 @@ useEffect(() => {
   <View style={styles.divider} />
 
   {/* ALT MENÜ */}
-  <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
+  <TouchableOpacity
+    style={styles.menuItem}
+    activeOpacity={0.7}
+    onPress={() => navigation.navigate("Bildirimler")}
+  >
     <View style={styles.iconBox}>
       <Ionicons name="notifications-outline" size={22} color="#e5e7eb" />
     </View>

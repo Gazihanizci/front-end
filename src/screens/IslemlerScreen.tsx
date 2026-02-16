@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -13,6 +13,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import { RootStackParamList } from "../../App";
 import api from "../config/api";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
+import { ThemeColors, useTheme } from "../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Islemler">;
 
@@ -22,7 +23,7 @@ type IslemRaw = {
   tutar?: number | string;
   aciklama?: string | null;
   kategoriAd?: string;
-  kategoriAdiSnapshot?: string; // ✅ backend'den gelen
+  kategoriAdiSnapshot?: string; // âœ… backend'den gelen
   hesapAdi?: string;
   tip?: "GELIR" | "GIDER" | string;
   islemTarihi?: string;
@@ -54,6 +55,8 @@ const toNumber = (value: number | string | undefined | null) => {
 };
 
 export default function IslemlerScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [items, setItems] = useState<IslemRaw[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,10 +69,10 @@ export default function IslemlerScreen({ navigation }: Props) {
   const size = 20;
   const [hasMore, setHasMore] = useState(true);
 
-  // ✅ StrictMode/dev double-effect kilidi
+  // âœ… StrictMode/dev double-effect kilidi
   const didInit = useRef(false);
 
-  // ✅ onEndReached bazen gereksiz tetiklenir: momentum guard
+  // âœ… onEndReached bazen gereksiz tetiklenir: momentum guard
   const onEndReachedCalledDuringMomentum = useRef(false);
 
   const normalize = useCallback((i: any): IslemRaw => {
@@ -114,7 +117,7 @@ export default function IslemlerScreen({ navigation }: Props) {
 
         const nextPage = mode === "more" ? page + 1 : 0;
 
-        // ✅ DİKKAT:
+        // âœ… DİKKAT:
         // baseURL "...:8080/api" ise: "/islemler/my"
         // baseURL "...:8080" ise: "/api/islemler/my"
         const res = await api.get("/api/islemler/my", {
@@ -123,7 +126,7 @@ export default function IslemlerScreen({ navigation }: Props) {
 
         const data = res.data;
 
-        // ✅ Page -> content
+        // âœ… Page -> content
         const contentRaw: any[] = Array.isArray(data)
           ? data
           : Array.isArray(data?.content)
@@ -159,7 +162,7 @@ export default function IslemlerScreen({ navigation }: Props) {
     [page, hasMore, loadingMore, loading, refreshing, normalize]
   );
 
-  // ✅ sadece 1 kez initial fetch (loop bitti)
+  // âœ… sadece 1 kez initial fetch (loop bitti)
   useEffect(() => {
     if (didInit.current) return;
     didInit.current = true;
@@ -182,20 +185,20 @@ export default function IslemlerScreen({ navigation }: Props) {
 
     const subtitleParts = [item.hesapAdi, tipLabel].filter(Boolean);
     const subtitle =
-      subtitleParts.join(" • ") || (item.aciklama?.trim() ? String(item.aciklama).trim() : "Detay");
+      subtitleParts.join(" â€¢ ") || (item.aciklama?.trim() ? String(item.aciklama).trim() : "Detay");
 
     const amountNum = toNumber(item.tutar);
     const currency = item.paraBirimi || "TL";
 
     // tip yoksa nötr
     const amountColor =
-      tip === "GIDER" ? "#fb7185" : tip === "GELIR" ? "#facc15" : "#e5e7eb";
+      tip === "GIDER" ? colors.danger : tip === "GELIR" ? colors.warning : colors.text;
     const badgeBg =
       tip === "GIDER"
-        ? "rgba(251,113,133,0.18)"
+        ? colors.danger
         : tip === "GELIR"
-        ? "rgba(250,204,21,0.18)"
-        : "rgba(148,163,184,0.18)";
+        ? colors.warning
+        : colors.accentSoft;
     const badgeText = title?.[0]?.toUpperCase() || "?";
 
     return (
@@ -265,7 +268,7 @@ export default function IslemlerScreen({ navigation }: Props) {
     left={
       <HeaderAction
         label="Geri"
-        icon={<Ionicons name="chevron-back" size={16} color="#e5e7eb" />}
+        icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
         onPress={() => navigation.goBack()}
       />
     }
@@ -273,7 +276,7 @@ export default function IslemlerScreen({ navigation }: Props) {
 
   {loading ? (
     <View style={styles.loadingWrap}>
-      <ActivityIndicator color="#facc15" />
+      <ActivityIndicator color={colors.warning} />
       <Text style={styles.loadingText}>Yükleniyor...</Text>
     </View>
   ) : (
@@ -287,7 +290,7 @@ export default function IslemlerScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.summaryChip}>
-          <Ionicons name="time-outline" size={14} color="#e5e7eb" />
+          <Ionicons name="time-outline" size={14} color={colors.text} />
           <Text style={styles.summaryChipText}>
             {dateFilter === "ALL"
               ? "Tümü"
@@ -352,7 +355,7 @@ export default function IslemlerScreen({ navigation }: Props) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => fetchPage("refresh")}
-            tintColor="#facc15"
+            tintColor={colors.warning}
           />
         }
         onEndReachedThreshold={0.2}
@@ -367,7 +370,7 @@ export default function IslemlerScreen({ navigation }: Props) {
         ListFooterComponent={
           loadingMore ? (
             <View style={{ paddingVertical: 14 }}>
-              <ActivityIndicator color="#facc15" />
+              <ActivityIndicator color={colors.warning} />
             </View>
           ) : null
         }
@@ -379,19 +382,19 @@ export default function IslemlerScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0b0f1a" },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     paddingTop: 12,
     paddingHorizontal: 16,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148,163,184,0.12)",
+    borderBottomColor: colors.border,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  screenTitle: { color: "#e5e7eb", fontSize: 18, fontWeight: "900" },
+  screenTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
   listContent: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 28 },
   summaryCard: {
     marginHorizontal: 16,
@@ -400,15 +403,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 14,
-    backgroundColor: "rgba(148,163,184,0.08)",
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
+    borderColor: colors.border,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  summaryTitle: { color: "#e5e7eb", fontSize: 14, fontWeight: "800" },
-  summarySub: { color: "#94a3b8", fontSize: 12, marginTop: 4, fontWeight: "700" },
+  summaryTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  summarySub: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: "700" },
   summaryChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -416,11 +419,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(148,163,184,0.18)",
+    backgroundColor: colors.accentSoft,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.28)",
+    borderColor: colors.borderStrong,
   },
-  summaryChipText: { color: "#e5e7eb", fontSize: 11, fontWeight: "800" },
+  summaryChipText: { color: colors.text, fontSize: 11, fontWeight: "800" },
   filterRow: {
     flexDirection: "row",
     gap: 8,
@@ -433,15 +436,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.28)",
-    backgroundColor: "rgba(148,163,184,0.10)",
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.accentSoft,
   },
   filterChipActive: {
-    backgroundColor: "#facc15",
-    borderColor: "#facc15",
+    backgroundColor: colors.warning,
+    borderColor: colors.warning,
   },
-  filterText: { color: "#cbd5e1", fontSize: 12, fontWeight: "800" },
-  filterTextActive: { color: "#0b0f1a" },
+  filterText: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
+  filterTextActive: { color: colors.onAccent },
   card: {
     flexDirection: "row",
     alignItems: "center",
@@ -449,9 +452,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginBottom: 10,
     borderRadius: 16,
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
     gap: 12,
   },
   badge: {
@@ -461,31 +464,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  badgeText: { color: "#e5e7eb", fontSize: 14, fontWeight: "900" },
-  title: { color: "#e5e7eb", fontSize: 16, fontWeight: "800" },
+  badgeText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 16, fontWeight: "800" },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
-  subtitle: { color: "#94a3b8", fontSize: 12, fontWeight: "700" },
-  dot: { width: 4, height: 4, borderRadius: 4, backgroundColor: "#475569" },
-  dateText: { color: "#64748b", fontSize: 11, fontWeight: "700" },
+  subtitle: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
+  dot: { width: 4, height: 4, borderRadius: 4, backgroundColor: colors.textMuted },
+  dateText: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
   amountPill: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
-    backgroundColor: "rgba(148,163,184,0.12)",
+    backgroundColor: colors.accentSoft,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.22)",
+    borderColor: colors.borderStrong,
   },
   amount: { fontSize: 14, fontWeight: "900" },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  loadingText: { color: "#94a3b8", fontSize: 12, fontWeight: "700" },
+  loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
   emptyWrap: { alignItems: "center", justifyContent: "center", paddingVertical: 40 },
-  emptyText: { color: "#94a3b8", fontSize: 13, fontWeight: "700" },
+  emptyText: { color: colors.textMuted, fontSize: 13, fontWeight: "700" },
   errorText: {
-    color: "#fb7185",
+    color: colors.danger,
     fontSize: 12,
     fontWeight: "800",
     paddingHorizontal: 16,
     paddingTop: 10,
   },
 });
+
+
+
 

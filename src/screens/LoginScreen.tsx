@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
 import { saveProfile, saveToken } from "../utils/authStorage";
 import MessageBox from "../components/MessageBox";
-
+import { ThemeColors, useTheme } from "../theme/theme";
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 type MsgType = "success" | "error" | "info";
 type AuthResponse = {
@@ -33,6 +33,8 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function LoginScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [email, setEmail] = useState("");
   const [parola, setParola] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,14 +43,13 @@ export default function LoginScreen({ navigation }: Props) {
   const [msgText, setMsgText] = useState("");
   const [msgType, setMsgType] = useState<MsgType>("info");
   const [nextRoute, setNextRoute] = useState<"Home" | null>(null);
-  const [pendingAuth, setPendingAuth] = useState<{ token: string; kullaniciId?: number; email?: string } | null>(null);
 
-  // ✅ kart büyüme anim
+  // âœ… kart büyüme anim
   const cardAnim = useRef(new Animated.Value(0)).current; // 0 kapalı, 1 açık
   const [collapsedH, setCollapsedH] = useState<number | null>(null);
   const [expandedH, setExpandedH] = useState<number | null>(null);
 
-  // ✅ şifre alanı anim
+  // âœ… şifre alanı anim
   const passAnim = useRef(new Animated.Value(0)).current;
 
   const showMsg = (type: MsgType, text: string) => {
@@ -73,7 +74,7 @@ export default function LoginScreen({ navigation }: Props) {
     return e.length >= 5 && e.includes("@") && e.includes(".");
   }, [email]);
 
-  // ✅ TEK useEffect: hem şifre hem kart büyüsün
+  // âœ… TEK useEffect: hem şifre hem kart büyüsün
   useEffect(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
@@ -95,28 +96,13 @@ export default function LoginScreen({ navigation }: Props) {
 
   const handleMsgClose = () => {
     setMsgVisible(false);
-    if (pendingAuth) {
-      const { token, kullaniciId, email } = pendingAuth;
-      saveToken(token).then(() => {
-        if (kullaniciId && email) {
-          return saveProfile({ kullaniciId, email });
-        }
-      }).finally(() => {
-        setPendingAuth(null);
-        if (nextRoute) {
-          setNextRoute(null);
-          navigation.replace(nextRoute);
-        }
-      });
-      return;
-    }
     if (nextRoute) {
       setNextRoute(null);
       navigation.replace(nextRoute);
     }
   };
 
-  // ✅ 4. ADIM: card height hesapla
+  // âœ… 4. ADIM: card height hesapla
   const canAnimateCard = collapsedH !== null && expandedH !== null;
 
   const cardHeight = canAnimateCard
@@ -157,11 +143,10 @@ export default function LoginScreen({ navigation }: Props) {
         showMsg("error", "Token alinmadi");
         return;
       }
-      setPendingAuth({
-        token,
-        kullaniciId: res?.data?.kullaniciId,
-        email: res?.data?.email,
-      });
+      await saveToken(token);
+      if (res?.data?.kullaniciId && res?.data?.email) {
+        await saveProfile({ kullaniciId: res.data.kullaniciId, email: res.data.email });
+      }
       setNextRoute("Home");
       showMsg("success", "Giriş başarılı");
     } catch (err: any) {
@@ -173,20 +158,26 @@ export default function LoginScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.bgCircleOne} />
+      <View style={styles.bgCircleTwo} />
+      <View style={styles.bgRing} />
       {/* ÜST LOGO/HEAD */}
       <View style={styles.hero}>
+        <View style={styles.heroBadge}>
+          <Text style={styles.heroBadgeText}>Güvenli Giriş</Text>
+        </View>
         <Text style={styles.brand}>CÜZDAN</Text>
         <Text style={styles.subtitle}>Devam etmek için giriş yap</Text>
       </View>
 
-      {/* ✅ 4. ADIM: FORM KART Animated.View + height */}
+      {/* âœ… 4. ADIM: FORM KART Animated.View + height */}
       <Animated.View
         style={[
           styles.card,
           canAnimateCard && { height: cardHeight, overflow: "hidden" },
         ]}
       >
-        {/* ✅ 5. ADIM: Ölçüm (KAPALI) */}
+        {/* âœ… 5. ADIM: Ölçüm (KAPALI) */}
         <View
           style={styles.measure}
           onLayout={(e) => {
@@ -199,7 +190,7 @@ export default function LoginScreen({ navigation }: Props) {
           <TextInput
             style={styles.input}
             placeholder="Email adresini gir"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.textMuted}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -211,7 +202,7 @@ export default function LoginScreen({ navigation }: Props) {
           <View style={{ height: 16 }} />
         </View>
 
-        {/* ✅ 5. ADIM: Ölçüm (AÇIK) */}
+        {/* âœ… 5. ADIM: Ölçüm (AÇIK) */}
         <View
           style={styles.measure}
           onLayout={(e) => {
@@ -224,7 +215,7 @@ export default function LoginScreen({ navigation }: Props) {
           <TextInput
             style={styles.input}
             placeholder="Email adresini gir"
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.textMuted}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -236,8 +227,8 @@ export default function LoginScreen({ navigation }: Props) {
             <Text style={styles.label}>Şifre</Text>
             <TextInput
               style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor="#64748b"
+              placeholder="Parolanı gir"
+              placeholderTextColor={colors.textMuted}
               value={parola}
               onChangeText={setParola}
               secureTextEntry
@@ -253,14 +244,14 @@ export default function LoginScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {/* ✅ GÖRÜNEN GERÇEK UI */}
+        {/* âœ… GÖRÜNEN GERÇEK UI */}
         <Text style={styles.title}>Giriş Yap</Text>
 
         <Text style={styles.label}>Email</Text>
         <TextInput
           style={styles.input}
           placeholder="Email adresini gir"
-          placeholderTextColor="#64748b"
+          placeholderTextColor={colors.textMuted}
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
@@ -275,8 +266,8 @@ export default function LoginScreen({ navigation }: Props) {
           <Text style={styles.label}>Şifre</Text>
           <TextInput
             style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor="#64748b"
+            placeholder="Parolanı gir"
+            placeholderTextColor={colors.textMuted}
             value={parola}
             onChangeText={setParola}
             secureTextEntry
@@ -293,7 +284,7 @@ export default function LoginScreen({ navigation }: Props) {
             disabled={!emailValid || !parola || loading}
           >
             {loading ? (
-              <ActivityIndicator color="#0b0f1a" />
+              <ActivityIndicator color={colors.onAccent} />
             ) : (
               <Text style={styles.buttonText}>Giriş Yap</Text>
             )}
@@ -321,41 +312,84 @@ export default function LoginScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: "#0b0f1a",
+    backgroundColor: colors.background,
     justifyContent: "center",
+  },
+  bgCircleOne: {
+    position: "absolute",
+    width: 360,
+    height: 360,
+    borderRadius: 180,
+    backgroundColor: colors.accentSoft,
+    top: -140,
+    left: -90,
+  },
+  bgCircleTwo: {
+    position: "absolute",
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: colors.headerGlowA,
+    bottom: -120,
+    right: -80,
+  },
+  bgRing: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    top: 120,
+    right: -60,
   },
 
   hero: {
     alignItems: "center",
     marginBottom: 16,
   },
+  heroBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 10,
+  },
+  heroBadgeText: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
   brand: {
-    color: "#e5e7eb",
-    fontSize: 22,
+    color: colors.text,
+    fontSize: 28,
     fontWeight: "900",
-    letterSpacing: 0.3,
+    letterSpacing: 1,
   },
   subtitle: {
-    color: "#94a3b8",
+    color: colors.textMuted,
     marginTop: 6,
     fontSize: 13,
     fontWeight: "700",
   },
 
   card: {
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
     paddingBottom: 24,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
+    shadowColor: colors.borderStrong,
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
 
-  // ✅ ölçüm view’ları görünmesin
+  // âœ… ölçüm viewâ€™ları görünmesin
   measure: {
     position: "absolute",
     left: 0,
@@ -367,13 +401,13 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 18,
-    color: "#e5e7eb",
+    color: colors.text,
     fontWeight: "900",
     marginBottom: 12,
   },
 
   label: {
-    color: "#94a3b8",
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: "800",
     marginBottom: 6,
@@ -381,12 +415,12 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    backgroundColor: "#111827",
-    color: "#fff",
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.12)",
+    borderColor: colors.border,
     marginBottom: 12,
   },
 
@@ -395,7 +429,7 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
@@ -403,12 +437,15 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontWeight: "900",
-    color: "#0b0f1a",
+    color: colors.onAccent,
   },
 
   linkText: {
-    color: "#93c5fd",
+    color: colors.accent,
     textAlign: "center",
     fontWeight: "800",
   },
 });
+
+
+

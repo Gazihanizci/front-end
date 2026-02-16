@@ -1,5 +1,6 @@
-import React from "react";
+﻿import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ThemeColors, useTheme } from "../theme/theme";
 
 type Props = {
   adSoyad: string;
@@ -23,6 +24,9 @@ const formatDate = (iso?: string) => {
 };
 
 export default function IzinTalepCard({ adSoyad, createdAt, aciklama, onApprove, onReject, loading }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.card}>
       <Text style={styles.title}>{adSoyad || "Üye"}</Text>
@@ -41,34 +45,35 @@ export default function IzinTalepCard({ adSoyad, createdAt, aciklama, onApprove,
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#0f172a",
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
-    marginBottom: 12,
-  },
-  title: { color: "#e5e7eb", fontSize: 15, fontWeight: "900", marginBottom: 6 },
-  meta: { color: "#94a3b8", fontSize: 12, fontWeight: "700", marginBottom: 4 },
-  actions: { flexDirection: "row", gap: 10, marginTop: 10 },
-  approveBtn: {
-    flex: 1,
-    backgroundColor: "#facc15",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  approveText: { color: "#0b0f1a", fontSize: 13, fontWeight: "900" },
-  rejectBtn: {
-    flex: 1,
-    backgroundColor: "#1f2933",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(251,113,133,0.6)",
-  },
-  rejectText: { color: "#fb7185", fontSize: 13, fontWeight: "900" },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 18,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 12,
+    },
+    title: { color: colors.text, fontSize: 15, fontWeight: "900", marginBottom: 6 },
+    meta: { color: colors.textMuted, fontSize: 12, fontWeight: "700", marginBottom: 4 },
+    actions: { flexDirection: "row", gap: 10, marginTop: 10 },
+    approveBtn: {
+      flex: 1,
+      backgroundColor: colors.warning,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    approveText: { color: colors.onAccent, fontSize: 13, fontWeight: "900" },
+    rejectBtn: {
+      flex: 1,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.danger,
+    },
+    rejectText: { color: colors.danger, fontSize: 13, fontWeight: "900" },
+  });

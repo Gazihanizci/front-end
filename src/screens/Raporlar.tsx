@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,6 +15,7 @@ import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import { generatePDF } from "react-native-html-to-pdf";
 import RNFS from "react-native-fs";
 import MessageBox from "../components/MessageBox";
+import { ThemeColors, useTheme } from "../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Raporlar">;
 
@@ -114,6 +115,8 @@ const escapeHtml = (input: string) =>
     .replace(/'/g, "&#39;");
 
 export default function RaporlarScreen({ navigation }: Props) {
+  const { colors, mode } = useTheme();
+  const styles = useMemo(() => createStyles(colors, mode), [colors, mode]);
   const [items, setItems] = useState<IslemRaw[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -509,7 +512,7 @@ export default function RaporlarScreen({ navigation }: Props) {
           left={
             <HeaderAction
               label="Geri"
-              icon={<Ionicons name="chevron-back" size={16} color="#e5e7eb" />}
+              icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
               onPress={() => navigation.goBack()}
             />
           }
@@ -517,7 +520,7 @@ export default function RaporlarScreen({ navigation }: Props) {
 
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator color="#facc15" />
+            <ActivityIndicator color={colors.warning} />
             <Text style={styles.loadingText}>Yukleniyor...</Text>
           </View>
         ) : (
@@ -598,7 +601,7 @@ export default function RaporlarScreen({ navigation }: Props) {
               onPress={() => downloadPdfForMonth(downloadMonth, monthItemsMap.get(downloadMonth) ?? [])}
               disabled={downloading}
             >
-              <Ionicons name="download-outline" size={16} color="#0b0f1a" />
+              <Ionicons name="download-outline" size={16} color={colors.onAccent} />
               <Text style={styles.downloadBtnText}>Bireysel PDF</Text>
             </TouchableOpacity>
 
@@ -607,7 +610,7 @@ export default function RaporlarScreen({ navigation }: Props) {
               onPress={() => downloadFamilyPdfForMonth(downloadMonth)}
               disabled={downloading}
             >
-              <Ionicons name="people-outline" size={16} color="#0b0f1a" />
+              <Ionicons name="people-outline" size={16} color={colors.onAccent} />
               <Text style={styles.downloadBtnText}>Genel Aile PDF</Text>
             </TouchableOpacity>
 
@@ -624,7 +627,7 @@ export default function RaporlarScreen({ navigation }: Props) {
                     disabled={downloading}
                   >
                     <Text style={styles.memberDownloadName}>{m.adSoyad}</Text>
-                    <Ionicons name="download-outline" size={14} color="#0b0f1a" />
+                    <Ionicons name="download-outline" size={14} color={colors.onAccent} />
                   </TouchableOpacity>
                 ))
               ) : (
@@ -645,16 +648,16 @@ export default function RaporlarScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, mode: "dark" | "light") => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0b0f1a",
+    backgroundColor: colors.background,
     paddingTop: 8,
   },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  loadingText: { color: "#94a3b8", fontSize: 12, fontWeight: "700" },
+  loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
   errorText: {
-    color: "#fb7185",
+    color: colors.danger,
     fontSize: 12,
     fontWeight: "800",
     paddingHorizontal: 16,
@@ -662,7 +665,7 @@ const styles = StyleSheet.create({
   },
   section: { marginTop: 8 },
   sectionTitle: {
-    color: "#e5e7eb",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "800",
     paddingHorizontal: 16,
@@ -676,14 +679,14 @@ const styles = StyleSheet.create({
     minHeight: 98,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
-    backgroundColor: "rgba(148,163,184,0.08)",
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
     padding: 12,
     justifyContent: "space-between",
   },
   monthCellActive: {
-    borderColor: "#facc15",
-    shadowColor: "#facc15",
+    borderColor: colors.warning,
+    shadowColor: colors.warning,
     shadowOpacity: 0.25,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
@@ -691,19 +694,19 @@ const styles = StyleSheet.create({
   monthCellEmpty: {
     backgroundColor: "transparent",
     borderStyle: "dashed",
-    borderColor: "rgba(148,163,184,0.18)",
+    borderColor: colors.border,
   },
   monthCellPress: { flex: 1 },
-  monthLabel: { color: "#e2e8f0", fontSize: 12, fontWeight: "800" },
-  monthLabelActive: { color: "#facc15" },
-  monthLabelEmpty: { color: "#64748b" },
-  monthCount: { color: "#94a3b8", fontSize: 11, fontWeight: "700", marginTop: 6 },
-  monthEmptyText: { color: "#64748b", fontSize: 10, fontWeight: "700", marginTop: 6 },
+  monthLabel: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
+  monthLabelActive: { color: colors.warning },
+  monthLabelEmpty: { color: colors.textMuted },
+  monthCount: { color: colors.textMuted, fontSize: 11, fontWeight: "700", marginTop: 6 },
+  monthEmptyText: { color: colors.textMuted, fontSize: 10, fontWeight: "700", marginTop: 6 },
   monthDownload: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
@@ -713,38 +716,38 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#93c5fd",
+    backgroundColor: colors.accent,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
     alignSelf: "flex-start",
     marginTop: 6,
   },
-  monthDownloadText: { color: "#0b0f1a", fontSize: 11, fontWeight: "800" },
+  monthDownloadText: { color: colors.onAccent, fontSize: 11, fontWeight: "800" },
   downloadSheet: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
     top: 0,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: mode === "light" ? "rgba(15,23,42,0.35)" : "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
   },
   downloadSheetCard: {
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
   },
-  downloadTitle: { color: "#e5e7eb", fontSize: 16, fontWeight: "900" },
-  downloadSub: { color: "#94a3b8", fontSize: 12, marginTop: 6, fontWeight: "700" },
+  downloadTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  downloadSub: { color: colors.textMuted, fontSize: 12, marginTop: 6, fontWeight: "700" },
   downloadBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 12,
@@ -754,19 +757,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#93c5fd",
+    backgroundColor: colors.accent,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 12,
     marginTop: 10,
   },
-  downloadBtnText: { color: "#0b0f1a", fontSize: 13, fontWeight: "900" },
-  downloadSectionTitle: { color: "#e5e7eb", fontSize: 13, fontWeight: "900" },
+  downloadBtnText: { color: colors.onAccent, fontSize: 13, fontWeight: "900" },
+  downloadSectionTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
   memberDownloadRow: {
     marginTop: 8,
-    backgroundColor: "rgba(148,163,184,0.12)",
+    backgroundColor: colors.accentSoft,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.2)",
+    borderColor: colors.border,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
@@ -774,7 +777,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  memberDownloadName: { color: "#e5e7eb", fontSize: 12, fontWeight: "800" },
+  memberDownloadName: { color: colors.text, fontSize: 12, fontWeight: "800" },
   downloadClose: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
-  downloadCloseText: { color: "#94a3b8", fontWeight: "800" },
+  downloadCloseText: { color: colors.textMuted, fontWeight: "800" },
 });
+
+
+

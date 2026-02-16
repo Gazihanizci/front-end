@@ -18,7 +18,8 @@ api.interceptors.request.use(
     const token = await getToken();
     if (token) {
       config.headers = config.headers ?? {};
-      config.headers.Authorization = `Bearer ${token}`;
+      const trimmed = token.trim();
+      config.headers.Authorization = /^bearer\s+/i.test(trimmed) ? trimmed : `Bearer ${trimmed}`;
     }
     return config;
   },
@@ -34,7 +35,12 @@ api.interceptors.response.use(
     const skipLogout =
       url.includes("/api/ailekatil") ||
       url.includes("/api/aileler/katil") ||
-      url.includes("/api/ozelislemler");
+      url.includes("/api/ozelislemler") ||
+      url.includes("/api/market") ||
+      url.includes(":8090/");
+    if (status === 401) {
+      console.log("401 intercepted:", { url, skipLogout, data: error?.response?.data });
+    }
     if (status === 401 && !skipLogout) {
       await clearToken();
       await clearProfile();

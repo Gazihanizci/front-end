@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../config/api";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import MessageBox from "../components/MessageBox";
+import { ThemeColors, ThemeMode, useTheme } from "../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FamilyAccount">;
 
@@ -27,6 +28,8 @@ type FamilyInfo = {
 };
 
 export default function FamilyAccountScreen({ navigation }: Props) {
+  const { colors, mode } = useTheme();
+  const styles = useMemo(() => createStyles(colors, mode), [colors, mode]);
   const [family, setFamily] = useState<FamilyInfo | null>(null);
   const [familyInfo, setFamilyInfo] = useState<{
     aileId: number | null;
@@ -116,7 +119,7 @@ export default function FamilyAccountScreen({ navigation }: Props) {
       setMembers(data?.members ?? []);
     } catch (err: any) {
       console.log("Aile bilgisi hata:", err?.response?.data || err?.message);
-      setMembersError("�yeler y�klenemedi.");
+      setMembersError("ï¿½yeler yï¿½klenemedi.");
     } finally {
       setMembersLoading(false);
     }
@@ -179,7 +182,7 @@ useEffect(() => {
 
 
   // =========================
-  // ✅ Actions
+  // âœ… Actions
   // =========================
   const refetchFamily = async () => {
     setLoading(true);
@@ -210,7 +213,7 @@ useEffect(() => {
 
     setSaving(true);
     try {
-      // ✅ aile + parola aynı anda
+      // âœ… aile + parola aynı anda
       await api.post("/api/aileler", {
         aileAdi: ad,
         parola: p1,
@@ -256,7 +259,7 @@ useEffect(() => {
     setSaving(true);
     setJoinError("");
     try {
-      // ✅ aileye katıl: aileId + parola
+      // âœ… aileye katıl: aileId + parola
       await api.post("/api/ailekatil", {
         aileId: aileIdNum,
         parola: joinParola.trim(),
@@ -331,7 +334,7 @@ useEffect(() => {
   };
 
   // =========================
-  // ✅ UI
+  // âœ… UI
   // =========================
   return (
     <View style={styles.screen}>
@@ -406,11 +409,11 @@ useEffect(() => {
           </View>
 
           {hasFamily ? (
-            <Text style={{ color: "#94a3b8", marginTop: 10 }}>
+            <Text style={{ color: colors.textMuted, marginTop: 10 }}>
               Aile Hesabınız aktif.
             </Text>
           ) : (
-            <Text style={{ color: "#94a3b8", marginTop: 10 }}>
+            <Text style={{ color: colors.textMuted, marginTop: 10 }}>
               Herhangi Bir Aile Hesabınız Bulunmamaktadır.
             </Text>
           )}
@@ -433,7 +436,7 @@ useEffect(() => {
                 {hasFamily ? "Zaten bir aile hesabın var" : "Aile adı ve parola belirleyerek oluştur"}
               </Text>
             </View>
-            <Text style={styles.actionIcon}>＋</Text>
+            <Text style={styles.actionIcon}>ï¼‹</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -449,7 +452,7 @@ useEffect(() => {
               <Text style={styles.actionTitle}>Aileye Katıl</Text>
               <Text style={styles.actionSub}>Aile ID ve parola ile mevcut aileye dahil ol</Text>
             </View>
-            <Text style={styles.actionIcon}>↗</Text>
+            <Text style={styles.actionIcon}>â†—</Text>
           </TouchableOpacity>
 
           {hasFamily && (
@@ -463,7 +466,7 @@ useEffect(() => {
                 <Text style={styles.actionTitle}>Aileden Çık</Text>
                 <Text style={styles.actionSub}>Mevcut aile üyeliğini sonlandır</Text>
               </View>
-              <Text style={styles.actionIcon}>←</Text>
+              <Text style={styles.actionIcon}>â†</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -475,15 +478,15 @@ useEffect(() => {
   <Text style={styles.sectionSub}>{members.length} üye</Text>
 </View>
             {!hasFamily ? (
-              <Text style={{ color: "#94a3b8", marginTop: 10 }}>
+              <Text style={{ color: colors.textMuted, marginTop: 10 }}>
                 Önce bir aile hesabı oluştur ya da katıl.
               </Text>
             ) : membersLoading ? (
-              <Text style={{ color: "#94a3b8", marginTop: 10 }}>Yükleniyor...</Text>
+              <Text style={{ color: colors.textMuted, marginTop: 10 }}>Yükleniyor...</Text>
             ) : membersError ? (
-              <Text style={{ color: "#f87171", marginTop: 10 }}>{membersError}</Text>
+              <Text style={{ color: colors.danger, marginTop: 10 }}>{membersError}</Text>
             ) : members.length === 0 ? (
-              <Text style={{ color: "#94a3b8", marginTop: 10 }}>
+              <Text style={{ color: colors.textMuted, marginTop: 10 }}>
                 Üye bulunamadı.
               </Text>
             ) : (
@@ -530,7 +533,7 @@ useEffect(() => {
             <TextInput
               style={styles.input}
               placeholder="Aile Adı (örn: İzci Ailesi)"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
               value={aileAdi}
               onChangeText={setAileAdi}
             />
@@ -538,7 +541,7 @@ useEffect(() => {
             <TextInput
               style={styles.input}
               placeholder="Parola"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
               value={parola}
               onChangeText={setParola}
               secureTextEntry
@@ -547,7 +550,7 @@ useEffect(() => {
             <TextInput
               style={styles.input}
               placeholder="Parola (tekrar)"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
               value={parola2}
               onChangeText={setParola2}
               secureTextEntry
@@ -558,7 +561,7 @@ useEffect(() => {
               onPress={createFamily}
               disabled={saving}
             >
-              {saving ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryBtnText}>Oluştur</Text>}
+              {saving ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.primaryBtnText}>Oluştur</Text>}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -586,7 +589,7 @@ useEffect(() => {
             <TextInput
               style={styles.input}
               placeholder="Aile ID (örn: 10)"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
               value={joinAileId}
               onChangeText={setJoinAileId}
               keyboardType="numeric"
@@ -595,7 +598,7 @@ useEffect(() => {
             <TextInput
               style={styles.input}
               placeholder="Aile Parolası"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
               value={joinParola}
               onChangeText={(text) => {
                 setJoinParola(text);
@@ -614,7 +617,7 @@ useEffect(() => {
               onPress={joinFamily}
               disabled={saving}
             >
-              {saving ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryBtnText}>Katıl</Text>}
+              {saving ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.primaryBtnText}>Katıl</Text>}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -677,7 +680,7 @@ useEffect(() => {
               disabled={!selectedNewOwnerId || leaving}
             >
               {leaving ? (
-                <ActivityIndicator color="#000" />
+                <ActivityIndicator color={colors.onAccent} />
               ) : (
                 <Text style={styles.primaryBtnText}>Devret ve Çık</Text>
               )}
@@ -739,8 +742,8 @@ useEffect(() => {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#0b0f1a" },
+const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
 
   topBar: {
     paddingTop: 12,
@@ -750,48 +753,48 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  topBarLeft: { color: "#cbd5e1", fontSize: 18 },
+  topBarLeft: { color: colors.textMuted, fontSize: 18 },
   topBarCenter: { alignItems: "center" },
-  topTitle: { color: "#e5e7eb", fontSize: 18, fontWeight: "700" },
-  topSub: { color: "#94a3b8", fontSize: 13, marginTop: 2 },
+  topTitle: { color: colors.text, fontSize: 18, fontWeight: "700" },
+  topSub: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
 
   card: {
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     marginHorizontal: 16,
     marginTop: 14,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
   },
   cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardTitle: { color: "#e5e7eb", fontSize: 14, fontWeight: "800", letterSpacing: 0.6 },
+  cardTitle: { color: colors.text, fontSize: 14, fontWeight: "800", letterSpacing: 0.6 },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sectionSub: { color: "#94a3b8", fontSize: 12, fontWeight: "700" },
+  sectionSub: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
 
   heroCard: {
     marginHorizontal: 16,
     marginTop: 12,
     padding: 16,
     borderRadius: 18,
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
-  heroTitle: { color: "#e5e7eb", fontSize: 18, fontWeight: "900" },
-  heroSub: { color: "#94a3b8", fontSize: 12, marginTop: 4, fontWeight: "700" },
+  heroTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  heroSub: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: "700" },
   heroBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
   },
-  heroBadgeActive: { backgroundColor: "#facc15", borderColor: "rgba(250,204,21,0.55)" },
-  heroBadgeMuted: { backgroundColor: "#94a3b8", borderColor: "rgba(148,163,184,0.55)" },
-  heroBadgeText: { color: "#0b0f1a", fontWeight: "900", fontSize: 12 },
+  heroBadgeActive: { backgroundColor: colors.warning, borderColor: colors.warning },
+  heroBadgeMuted: { backgroundColor: colors.textMuted, borderColor: colors.borderStrong },
+  heroBadgeText: { color: colors.onAccent, fontWeight: "900", fontSize: 12 },
 
   statRow: {
     marginHorizontal: 16,
@@ -801,20 +804,20 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
   },
-  statLabel: { color: "#94a3b8", fontSize: 11, fontWeight: "800" },
-  statValue: { color: "#e5e7eb", fontSize: 14, fontWeight: "900", marginTop: 6 },
-  statValueActive: { color: "#facc15" },
-  statValueMuted: { color: "#94a3b8" },
+  statLabel: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
+  statValue: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 6 },
+  statValueActive: { color: colors.warning },
+  statValueMuted: { color: colors.textMuted },
 
   badge: {
-    color: "#0b0f1a",
-    backgroundColor: "#facc15",
+    color: colors.onAccent,
+    backgroundColor: colors.warning,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
@@ -822,8 +825,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   badgeMuted: {
-    color: "#0b0f1a",
-    backgroundColor: "#94a3b8",
+    color: colors.onAccent,
+    backgroundColor: colors.textMuted,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
@@ -836,32 +839,32 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: "rgba(148,163,184,0.12)",
+    borderTopColor: colors.border,
   },
-  infoLabel: { color: "#94a3b8", fontSize: 13, fontWeight: "700" },
-  infoValue: { color: "#e5e7eb", fontSize: 14, fontWeight: "800" },
+  infoLabel: { color: colors.textMuted, fontSize: 13, fontWeight: "700" },
+  infoValue: { color: colors.text, fontSize: 14, fontWeight: "800" },
 
   actionRow: {
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderColor: "rgba(148,163,184,0.12)",
-    borderTopColor: "rgba(148,163,184,0.12)",
+    borderColor: colors.border,
+    borderTopColor: colors.border,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  actionTitle: { color: "#e5e7eb", fontSize: 16, fontWeight: "800" },
-  actionSub: { color: "#94a3b8", marginTop: 4, fontSize: 12, fontWeight: "700" },
-  actionIcon: { color: "#e5e7eb", fontSize: 20, fontWeight: "900" },
+  actionTitle: { color: colors.text, fontSize: 16, fontWeight: "800" },
+  actionSub: { color: colors.textMuted, marginTop: 4, fontSize: 12, fontWeight: "700" },
+  actionIcon: { color: colors.text, fontSize: 20, fontWeight: "900" },
 
   tabs: {
     marginHorizontal: 16,
     marginTop: 12,
     flexDirection: "row",
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
     padding: 4,
   },
   tabBtn: {
@@ -871,10 +874,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   tabBtnActive: {
-    backgroundColor: "#111827",
+    backgroundColor: colors.surfaceAlt,
   },
-  tabText: { color: "#94a3b8", fontSize: 13, fontWeight: "800" },
-  tabTextActive: { color: "#e5e7eb" },
+  tabText: { color: colors.textMuted, fontSize: 13, fontWeight: "800" },
+  tabTextActive: { color: colors.text },
 
   memberCard: {
     flexDirection: "row",
@@ -882,9 +885,9 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: "rgba(148,163,184,0.08)",
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
+    borderColor: colors.border,
   },
   memberAvatar: {
     width: 40,
@@ -892,33 +895,33 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
   },
-  memberAvatarText: { color: "#0b0f1a", fontSize: 16, fontWeight: "900" },
-  memberName: { color: "#e5e7eb", fontSize: 14, fontWeight: "800" },
-  memberSub: { color: "#94a3b8", fontSize: 12, marginTop: 4, fontWeight: "700" },
+  memberAvatarText: { color: colors.onAccent, fontSize: 16, fontWeight: "900" },
+  memberName: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  memberSub: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: "700" },
   removeBtn: {
     marginTop: 10,
     alignSelf: "flex-start",
-    backgroundColor: "#fb7185",
+    backgroundColor: colors.danger,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
   },
-  removeBtnText: { color: "#0b0f1a", fontSize: 12, fontWeight: "900" },
+  removeBtnText: { color: colors.onAccent, fontSize: 12, fontWeight: "900" },
   memberPickRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: "rgba(148,163,184,0.08)",
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
+    borderColor: colors.border,
   },
   memberPickRowActive: {
-    borderColor: "#facc15",
-    backgroundColor: "rgba(250,204,21,0.12)",
+    borderColor: colors.warning,
+    backgroundColor: colors.accentSoft,
   },
   memberPickAvatar: {
     width: 34,
@@ -926,47 +929,52 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
   },
-  memberPickAvatarText: { color: "#0b0f1a", fontSize: 14, fontWeight: "900" },
-  memberPickName: { color: "#e5e7eb", fontSize: 13, fontWeight: "800" },
-  memberPickSub: { color: "#94a3b8", fontSize: 11, marginTop: 2, fontWeight: "700" },
+  memberPickAvatarText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
+  memberPickName: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  memberPickSub: { color: colors.textMuted, fontSize: 11, marginTop: 2, fontWeight: "700" },
 
 
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
+  modalBackdrop: { flex: 1, backgroundColor: mode === "light" ? "rgba(15,23,42,0.35)" : "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
   sheet: {
     height: "56%",
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
   },
-  sheetTitle: { color: "#fff", fontSize: 18, fontWeight: "900", marginBottom: 10 },
-  helperText: { color: "#94a3b8", fontSize: 12, marginBottom: 10, fontWeight: "700" },
-  errorText: { color: "#f87171", fontSize: 12, marginBottom: 8, fontWeight: "700" },
+  sheetTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginBottom: 10 },
+  helperText: { color: colors.textMuted, fontSize: 12, marginBottom: 10, fontWeight: "700" },
+  errorText: { color: colors.danger, fontSize: 12, marginBottom: 8, fontWeight: "700" },
 
-  input: { backgroundColor: "#111827", color: "#fff", padding: 14, borderRadius: 12, marginBottom: 10 },
+  input: { backgroundColor: colors.surfaceAlt, color: colors.text, padding: 14, borderRadius: 12, marginBottom: 10 },
 debugText: {
-  color: "#94a3b8",
+  color: colors.textMuted,
   fontSize: 12,
   marginTop: 6,
   fontWeight: "700",
 },
 
   primaryBtn: {
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
     marginTop: 4,
   },
-  primaryBtnText: { color: "#0b0f1a", fontWeight: "900" },
+  primaryBtnText: { color: colors.onAccent, fontWeight: "900" },
 
   cancelBtn: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
-  cancelText: { color: "#94a3b8", fontWeight: "800" },
+  cancelText: { color: colors.textMuted, fontWeight: "800" },
 });
+
+
+
+
+
 
 
 

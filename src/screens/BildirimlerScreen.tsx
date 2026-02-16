@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -6,10 +6,13 @@ import { RootStackParamList } from "../../App";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import api from "../config/api";
 import IzinTalepCard from "../components/IzinTalepCard";
+import { ThemeColors, useTheme } from "../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Bildirimler">;
 
 export default function BildirimlerScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -82,17 +85,17 @@ export default function BildirimlerScreen({ navigation }: Props) {
     <View style={styles.container}>
       <ScreenHeader
         title="Bildirimler"
-        subtitle="Guncel bildirimler"
+        subtitle="Güncel bildirimler"
         left={
           <HeaderAction
             label="Geri"
-            icon={<Ionicons name="chevron-back" size={16} color="#e5e7eb" />}
+            icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
             onPress={() => navigation.goBack()}
           />
         }
         right={
           <HeaderAction
-            icon={<Ionicons name="refresh" size={16} color="#e5e7eb" />}
+            icon={<Ionicons name="refresh" size={16} color={colors.text} />}
             onPress={fetchInbox}
           />
         }
@@ -103,7 +106,7 @@ export default function BildirimlerScreen({ navigation }: Props) {
 
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator color="#facc15" />
+            <ActivityIndicator color={colors.warning} />
             <Text style={styles.muted}>Yükleniyor...</Text>
           </View>
         ) : error ? (
@@ -128,11 +131,12 @@ export default function BildirimlerScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0b0f1a" },
-  content: { padding: 16 },
-  sectionTitle: { color: "#e5e7eb", fontSize: 14, fontWeight: "900", marginBottom: 10 },
-  center: { alignItems: "center", paddingVertical: 16, gap: 8 },
-  muted: { color: "#94a3b8", fontSize: 12, fontWeight: "700" },
-  error: { color: "#fb7185", fontSize: 12, fontWeight: "800" },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    content: { padding: 16 },
+    sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginBottom: 10 },
+    center: { alignItems: "center", paddingVertical: 16, gap: 8 },
+    muted: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
+    error: { color: colors.danger, fontSize: 12, fontWeight: "800" },
+  });

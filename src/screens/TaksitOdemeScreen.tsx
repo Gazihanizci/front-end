@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,6 +17,7 @@ import api from "../config/api";
 import MessageBox from "../components/MessageBox";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
+import { ThemeColors, useTheme } from "../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TaksitOdeme">;
 
@@ -78,6 +79,8 @@ const isValidDateYYYYMMDD = (s: string) => {
 };
 
 export default function TaksitOdemeScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [items, setItems] = useState<TaksitApiItem[]>([]);
   const [loadingList, setLoadingList] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -293,13 +296,13 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
         left={
           <HeaderAction
             label="Geri"
-            icon={<Ionicons name="chevron-back" size={16} color="#e5e7eb" />}
+            icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
             onPress={() => navigation.goBack()}
           />
         }
         right={
           <HeaderAction
-            icon={<Ionicons name="refresh" size={16} color="#e5e7eb" />}
+            icon={<Ionicons name="refresh" size={16} color={colors.text} />}
             onPress={fetchMy}
           />
         }
@@ -316,7 +319,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
               value={form.baslik}
               onChangeText={(v) => setForm((p) => ({ ...p, baslik: v }))}
               placeholder="Örn: Telefon"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
             />
 
             <Text style={styles.label}>Toplam Tutar (opsiyonel)</Text>
@@ -325,7 +328,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
               value={form.tutar}
               onChangeText={(v) => setForm((p) => ({ ...p, tutar: v }))}
               placeholder="Örn: 12000"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
 
@@ -335,7 +338,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
               value={form.paraBirimi}
               onChangeText={(v) => setForm((p) => ({ ...p, paraBirimi: v }))}
               placeholder="TL, USD..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               autoCapitalize="characters"
             />
 
@@ -359,7 +362,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
               value={form.taksitSayisi}
               onChangeText={(v) => setForm((p) => ({ ...p, taksitSayisi: v }))}
               placeholder="Örn: 12"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
 
@@ -369,7 +372,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
               value={(form.aylikTutar || computedAylik).toString()}
               onChangeText={(v) => setForm((p) => ({ ...p, aylikTutar: v }))}
               placeholder="Otomatik hesaplanır"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
 
@@ -379,14 +382,14 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
               value={form.aciklama}
               onChangeText={(v) => setForm((p) => ({ ...p, aciklama: v }))}
               placeholder="Opsiyonel"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               multiline
             />
 
             <TouchableOpacity style={styles.saveButton} activeOpacity={0.85} onPress={onCreate} disabled={saving}>
               {saving ? (
                 <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
-                  <ActivityIndicator color="#0b0f1a" />
+                  <ActivityIndicator color={colors.onAccent} />
                   <Text style={styles.saveButtonText}>Kaydediliyor...</Text>
                 </View>
               ) : (
@@ -395,7 +398,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
             </TouchableOpacity>
 
             <Text style={styles.hintText}>
-              Not: Backend her ay bu “Aylık Tutar”ı otomatik olarak İşlemler’e “Diğer Giderler” olarak düşer.
+              Not: Backend her ay bu â€œAylık Tutarâ€ı otomatik olarak İşlemlerâ€™e â€œDiğer Giderlerâ€ olarak düşer.
             </Text>
           </View>
 
@@ -403,8 +406,8 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
 
           {loadingList ? (
             <View style={{ paddingVertical: 14, alignItems: "center" }}>
-              <ActivityIndicator color="#facc15" />
-              <Text style={{ color: "#94a3b8", marginTop: 8, fontWeight: "700" }}>Yükleniyor...</Text>
+              <ActivityIndicator color={colors.warning} />
+              <Text style={{ color: colors.textMuted, marginTop: 8, fontWeight: "700" }}>Yükleniyor...</Text>
             </View>
           ) : normalizedItems.length === 0 ? (
             <Text style={styles.emptyText}>Henüz kayıt yok.</Text>
@@ -419,7 +422,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
                   <Text style={styles.label}>Aylık Tutar</Text>
                   <Text style={styles.value}>
                     {item.paraBirimi === "TL" || item.paraBirimi === "TRY"
-                      ? `₺ ${formatTRY(item.tutar)}`
+                      ? `â‚º ${formatTRY(item.tutar)}`
                       : `${item.tutar} ${item.paraBirimi}`}
                   </Text>
                 </View>
@@ -465,8 +468,8 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0b0f1a" },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     paddingTop: 12,
     paddingHorizontal: 16,
@@ -477,26 +480,26 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  screenTitle: { color: "#e5e7eb", fontSize: 18, fontWeight: "900" },
+  screenTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
   content: { padding: 16 },
 
   card: {
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
     marginBottom: 14,
   },
-  cardTitle: { color: "#e5e7eb", fontSize: 16, fontWeight: "900", marginBottom: 12 },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "900", marginBottom: 12 },
 
   row: { marginBottom: 12 },
-  label: { color: "#94a3b8", fontSize: 12, fontWeight: "800", marginBottom: 4 },
-  value: { color: "#e5e7eb", fontSize: 14, fontWeight: "800" },
+  label: { color: colors.textMuted, fontSize: 12, fontWeight: "800", marginBottom: 4 },
+  value: { color: colors.text, fontSize: 14, fontWeight: "800" },
 
   input: {
-    backgroundColor: "#0b1224",
-    color: "#e5e7eb",
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -504,29 +507,31 @@ const styles = StyleSheet.create({
     borderColor: "rgba(148,163,184,0.18)",
     marginBottom: 12,
   },
-  inputText: { color: "#e5e7eb", fontSize: 14, fontWeight: "800" },
+  inputText: { color: colors.text, fontSize: 14, fontWeight: "800" },
   textarea: { minHeight: 80, textAlignVertical: "top" },
 
   saveButton: {
     marginTop: 4,
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
   },
-  saveButtonText: { color: "#0b0f1a", fontSize: 14, fontWeight: "900" },
+  saveButtonText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
 
-  hintText: { color: "#64748b", fontSize: 11, fontWeight: "700", marginTop: 10 },
+  hintText: { color: colors.textMuted, fontSize: 11, fontWeight: "700", marginTop: 10 },
 
-  sectionTitle: { color: "#e5e7eb", fontSize: 14, fontWeight: "900", marginBottom: 8 },
-  emptyText: { color: "#94a3b8", fontSize: 12, fontWeight: "700", marginBottom: 12 },
+  sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginBottom: 8 },
+  emptyText: { color: colors.textMuted, fontSize: 12, fontWeight: "700", marginBottom: 12 },
 
   endButton: {
     marginTop: 8,
-    backgroundColor: "#fb7185",
+    backgroundColor: colors.danger,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
   },
-  endButtonText: { color: "#0b0f1a", fontSize: 14, fontWeight: "900" },
+  endButtonText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
 });
+
+

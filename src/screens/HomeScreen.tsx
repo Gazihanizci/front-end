@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import * as Progress from "react-native-progress";
 import Svg, { Circle, G } from "react-native-svg";
+import { ThemeColors, ThemeMode, useTheme } from "../theme/theme";
 
 type Account = { id: string; name: string; balance: number; currency: string };
 
@@ -53,6 +54,8 @@ type CategorySummaryItem = {
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 export default function HomeScreen({ navigation }: Props) {
+  const { colors, mode } = useTheme();
+  const styles = useMemo(() => createStyles(colors, mode), [colors, mode]);
   // =========================
   // ✅ STATE
   // =========================
@@ -176,18 +179,35 @@ export default function HomeScreen({ navigation }: Props) {
       .filter((x) => x.tip === "GIDER")
       .sort((a, b) => Number(b.toplamTutar) - Number(a.toplamTutar));
   }, [categorySummary]);
-  const expensePalette = [
-    "#fb7185",
-    "#facc15",
-    "#60a5fa",
-    "#34d399",
-    "#fb923c",
-    "#a78bfa",
-    "#f472b6",
-    "#38bdf8",
-    "#22c55e",
-    "#e879f9",
-  ];
+  const expensePalette = useMemo(
+    () =>
+      mode === "light"
+        ? [
+            "#fecdd3",
+            "#fde68a",
+            "#bfdbfe",
+            "#bbf7d0",
+            "#fed7aa",
+            "#ddd6fe",
+            "#fbcfe8",
+            "#bae6fd",
+            "#86efac",
+            "#f5d0fe",
+          ]
+        : [
+            "#fb7185",
+            "#facc15",
+            "#60a5fa",
+            "#34d399",
+            "#fb923c",
+            "#a78bfa",
+            "#f472b6",
+            "#38bdf8",
+            "#22c55e",
+            "#e879f9",
+          ],
+    [mode]
+  );
   const ringSize = 160;
   const ringStroke = 16;
   const ringRadius = (ringSize - ringStroke) / 2;
@@ -462,7 +482,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
             ? `${userInfo.ad} ${userInfo.soyad}`
             : "Kullanıcı"
         }
-        left={<HeaderAction label="Menü" onPress={() => navigation.navigate("Menu")} />}
+        right={<HeaderAction label="Menü" onPress={() => navigation.navigate("Menu")} />}
       />
 
       <ScrollView
@@ -471,7 +491,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#facc15"
+            tintColor={colors.warning}
           />
         }
       >
@@ -488,8 +508,8 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 size={160}
                 thickness={16}
                 progress={incomePct / 100}
-                color="#facc15"
-                unfilledColor="#fb7185"
+                color={colors.warning}
+                unfilledColor={colors.danger}
                 borderWidth={0}
                 showsText={false}
               />
@@ -514,11 +534,11 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
               <View style={{ height: 14 }} />
 
               <View style={styles.legendRow}>
-                <View style={[styles.legendDot, { backgroundColor: "#facc15" }]} />
+                <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
                 <Text style={styles.legendText}>Gelir {incomePct}%</Text>
               </View>
               <View style={styles.legendRow}>
-                <View style={[styles.legendDot, { backgroundColor: "#fb7185" }]} />
+                <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
                 <Text style={styles.legendText}>Gider {expensePct}%</Text>
               </View>
             </View>
@@ -531,9 +551,9 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
 
           <View style={styles.chartArea}>
             {loading6Ay ? (
-              <Text style={{ color: "#94a3b8" }}>Yükleniyor...</Text>
+              <Text style={{ color: colors.textMuted }}>Yükleniyor...</Text>
             ) : months.length === 0 ? (
-              <Text style={{ color: "#94a3b8" }}>Veri yok</Text>
+              <Text style={{ color: colors.textMuted }}>Veri yok</Text>
             ) : (
               months.map((m, i) => {
                 const incH = calcHeight(incomes[i]);
@@ -570,9 +590,9 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           <Text style={styles.cardTitle}>HARCAMALAR NEREYE GİDİYOR?</Text>
 
           {loadingCategorySummary ? (
-            <Text style={{ color: "#94a3b8", marginTop: 10 }}>Yükleniyor...</Text>
+            <Text style={{ color: colors.textMuted, marginTop: 10 }}>Yükleniyor...</Text>
           ) : giderItems.length === 0 ? (
-            <Text style={{ color: "#94a3b8", marginTop: 10 }}>Bu ay gider verisi yok</Text>
+            <Text style={{ color: colors.textMuted, marginTop: 10 }}>Bu ay gider verisi yok</Text>
           ) : (
             <View style={styles.categoryDonutRow}>
               <View style={styles.categoryDonutWrap}>
@@ -582,7 +602,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                       cx={ringSize / 2}
                       cy={ringSize / 2}
                       r={ringRadius}
-                      stroke="rgba(148,163,184,0.18)"
+                      stroke={colors.divider}
                       strokeWidth={ringStroke}
                       fill="transparent"
                     />
@@ -744,9 +764,9 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           </View>
 
           {loadingAccount ? (
-            <Text style={{ color: "#94a3b8", marginTop: 10 }}>Yükleniyor...</Text>
+            <Text style={{ color: colors.textMuted, marginTop: 10 }}>Yükleniyor...</Text>
           ) : accounts.length === 0 ? (
-            <Text style={{ color: "#94a3b8", marginTop: 10 }}>
+            <Text style={{ color: colors.textMuted, marginTop: 10 }}>
               Hesap yok. + ile ekleyebilirsin.
             </Text>
           ) : (
@@ -794,7 +814,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
   <TextInput
     style={styles.input}
     placeholder="Hesap Adı (örn: Nakit Kasa)"
-    placeholderTextColor="#9ca3af"
+    placeholderTextColor={colors.textMuted}
     value={hesapAdi}
     onChangeText={setHesapAdi}
   />
@@ -827,7 +847,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
   <TextInput
     style={styles.input}
     placeholder="Başlangıç Bakiyesi"
-    placeholderTextColor="#9ca3af"
+    placeholderTextColor={colors.textMuted}
     value={bakiye}
     onChangeText={setBakiye}
     keyboardType="numeric"
@@ -839,7 +859,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
     disabled={saving}
   >
     {saving ? (
-      <ActivityIndicator color="#000" />
+      <ActivityIndicator color={colors.onAccent} />
     ) : (
       <Text style={styles.primaryBtnText}>Kaydet</Text>
     )}
@@ -869,7 +889,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
             <TextInput
               style={styles.input}
               placeholder="Yeni Bakiye"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
               value={newBalanceText}
               onChangeText={setNewBalanceText}
               keyboardType="numeric"
@@ -881,7 +901,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
               disabled={updatingBalance}
             >
               {updatingBalance ? (
-                <ActivityIndicator color="#000" />
+                <ActivityIndicator color={colors.onAccent} />
               ) : (
                 <Text style={styles.primaryBtnText}>Kaydet</Text>
               )}
@@ -901,8 +921,8 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#0b0f1a" },
+const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
 
   topBar: {
     paddingTop: 12,
@@ -912,24 +932,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  topBarLeft: { color: "#cbd5e1", fontSize: 18 },
+  topBarLeft: { color: colors.textMuted, fontSize: 18 },
   topBarCenter: { alignItems: "center" },
-  topTitle: { color: "#e5e7eb", fontSize: 18, fontWeight: "700" },
-  topSub: { color: "#94a3b8", fontSize: 13, marginTop: 2 },
-  icon: { color: "#e5e7eb", fontSize: 22 },
+  topTitle: { color: colors.text, fontSize: 18, fontWeight: "700" },
+  topSub: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
+  icon: { color: colors.text, fontSize: 22 },
 
   card: {
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     marginHorizontal: 16,
     marginTop: 14,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
   },
   cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardTitle: { color: "#e5e7eb", fontSize: 14, fontWeight: "800", letterSpacing: 0.6 },
-  cardSubtitle: { color: "#94a3b8", fontSize: 12, marginTop: 4, fontWeight: "700" },
+  cardTitle: { color: colors.text, fontSize: 14, fontWeight: "800", letterSpacing: 0.6 },
+  cardSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: "700" },
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   sectionBadge: {
     minWidth: 28,
@@ -937,14 +957,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(148,163,184,0.18)",
+    backgroundColor: colors.accentSoft,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.28)",
+    borderColor: colors.borderStrong,
   },
-  sectionBadgeText: { color: "#e5e7eb", fontSize: 12, fontWeight: "900" },
+  sectionBadgeText: { color: colors.text, fontSize: 12, fontWeight: "900" },
   badge: {
-    color: "#0b0f1a",
-    backgroundColor: "#facc15",
+    color: colors.onAccent,
+    backgroundColor: colors.warning,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
@@ -959,7 +979,7 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 160,
     borderWidth: 16,
-    borderColor: "rgba(148,163,184,0.18)",
+    borderColor: colors.divider,
   },
   donutCenter: {
     position: "absolute",
@@ -970,16 +990,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  donutCenterTitle: { color: "#e5e7eb", fontWeight: "800", fontSize: 14 },
-  donutCenterSub: { color: "#94a3b8", marginTop: 4, fontSize: 12 },
+  donutCenterTitle: { color: colors.text, fontWeight: "800", fontSize: 14 },
+  donutCenterSub: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
 
-  kpiLabel: { color: "#94a3b8", fontSize: 12, marginTop: 2 },
-  kpiValue: { color: "#facc15", fontSize: 16, fontWeight: "800", marginTop: 2 },
-  kpiValueDanger: { color: "#fb7185", fontSize: 16, fontWeight: "800", marginTop: 2 },
+  kpiLabel: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  kpiValue: { color: colors.warning, fontSize: 16, fontWeight: "800", marginTop: 2 },
+  kpiValueDanger: { color: colors.danger, fontSize: 16, fontWeight: "800", marginTop: 2 },
 
   legendRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
   legendDot: { width: 10, height: 10, borderRadius: 10, marginRight: 8 },
-  legendText: { color: "#cbd5e1", fontSize: 12 },
+  legendText: { color: colors.textMuted, fontSize: 12 },
 
   chartArea: {
     marginTop: 14,
@@ -991,15 +1011,15 @@ const styles = StyleSheet.create({
   },
   chartCol: { width: 42, alignItems: "center", justifyContent: "flex-end" },
   barGroup: { flexDirection: "row", alignItems: "flex-end", justifyContent: "center", height: 100 },
-  barIncome: { width: 12, borderRadius: 8, backgroundColor: "#facc15", opacity: 0.95 },
-  barExpense: { width: 12, borderRadius: 8, backgroundColor: "#fb7185", opacity: 0.95 },
-  chartLabel: { marginTop: 8, color: "#64748b", fontSize: 12, fontWeight: "700" },
+  barIncome: { width: 12, borderRadius: 8, backgroundColor: colors.warning, opacity: 0.95 },
+  barExpense: { width: 12, borderRadius: 8, backgroundColor: colors.danger, opacity: 0.95 },
+  chartLabel: { marginTop: 8, color: colors.textMuted, fontSize: 12, fontWeight: "700" },
 
   chartLegendRow: { marginTop: 12, flexDirection: "row", gap: 14 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 8 },
-  legendSwatchIncome: { width: 12, height: 12, borderRadius: 4, backgroundColor: "#facc15" },
-  legendSwatchExpense: { width: 12, height: 12, borderRadius: 4, backgroundColor: "#fb7185" },
-  legendText2: { color: "#94a3b8", fontSize: 12, fontWeight: "700" },
+  legendSwatchIncome: { width: 12, height: 12, borderRadius: 4, backgroundColor: colors.warning },
+  legendSwatchExpense: { width: 12, height: 12, borderRadius: 4, backgroundColor: colors.danger },
+  legendText2: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
   categoryDonutRow: {
     marginTop: 12,
     flexDirection: "row",
@@ -1033,13 +1053,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   categoryBadgeText: {
-    color: "#0b0f1a",
+    color: colors.onAccent,
     fontSize: 12,
     fontWeight: "900",
   },
-  categoryName: { color: "#e5e7eb", fontSize: 12, fontWeight: "800" },
-  categoryAmount: { color: "#94a3b8", fontSize: 11, marginTop: 2, fontWeight: "700" },
-  categoryPct: { color: "#e5e7eb", fontSize: 12, fontWeight: "900" },
+  categoryName: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  categoryAmount: { color: colors.textMuted, fontSize: 11, marginTop: 2, fontWeight: "700" },
+  categoryPct: { color: colors.text, fontSize: 12, fontWeight: "900" },
   rateGrid: {
     marginTop: 12,
     flexDirection: "row",
@@ -1048,9 +1068,9 @@ const styles = StyleSheet.create({
   },
   rateCard: {
     width: "48%",
-    backgroundColor: "rgba(148,163,184,0.08)",
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 12,
   },
@@ -1066,7 +1086,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(250,204,21,0.15)",
+    backgroundColor: colors.accentSoft,
   },
   rateIconAltin: {
     height: 22,
@@ -1075,34 +1095,34 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(34,197,94,0.12)",
+    backgroundColor: colors.accentSoft,
   },
   rateIconText: {
-    color: "#facc15",
+    color: colors.warning,
     fontWeight: "900",
     fontSize: 11,
     lineHeight: 12,
     letterSpacing: 0.4,
   },
   rateIconTextAltin: {
-    color: "#22c55e",
+    color: colors.success,
     fontWeight: "900",
     fontSize: 11,
     lineHeight: 12,
     letterSpacing: 0.4,
   },
-  rateCode: { color: "#cbd5e1", fontSize: 12, fontWeight: "800", flexShrink: 1 },
-  rateValue: { marginTop: 8, color: "#e5e7eb", fontSize: 16, fontWeight: "900" },
-  rateChangeUp: { marginTop: 4, color: "#22c55e", fontSize: 12, fontWeight: "800" },
-  rateChangeDown: { marginTop: 4, color: "#fb7185", fontSize: 12, fontWeight: "800" },  accountCard: {
+  rateCode: { color: colors.textMuted, fontSize: 12, fontWeight: "800", flexShrink: 1 },
+  rateValue: { marginTop: 8, color: colors.text, fontSize: 16, fontWeight: "900" },
+  rateChangeUp: { marginTop: 4, color: colors.success, fontSize: 12, fontWeight: "800" },
+  rateChangeDown: { marginTop: 4, color: colors.danger, fontSize: 12, fontWeight: "800" },  accountCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: "rgba(148,163,184,0.08)",
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
+    borderColor: colors.border,
   },
   accountIcon: {
     width: 40,
@@ -1110,23 +1130,23 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
   },
-  accountIconText: { color: "#0b0f1a", fontSize: 16, fontWeight: "900" },
-  accountName: { color: "#e5e7eb", fontSize: 15, fontWeight: "800" },
-  accountSub: { color: "#94a3b8", fontSize: 12, marginTop: 4, fontWeight: "700" },
-  accountBalance: { color: "#e5e7eb", fontSize: 16, fontWeight: "900" },
-  accountCurrency: { color: "#94a3b8", fontSize: 12, marginTop: 2, fontWeight: "700" },
+  accountIconText: { color: colors.onAccent, fontSize: 16, fontWeight: "900" },
+  accountName: { color: colors.text, fontSize: 15, fontWeight: "800" },
+  accountSub: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: "700" },
+  accountBalance: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  accountCurrency: { color: colors.textMuted, fontSize: 12, marginTop: 2, fontWeight: "700" },
   updateBtn: {
     marginTop: 8,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
-    backgroundColor: "rgba(250,204,21,0.15)",
+    backgroundColor: colors.accentSoft,
     borderWidth: 1,
-    borderColor: "rgba(250,204,21,0.5)",
+    borderColor: colors.warning,
   },
-  updateBtnText: { color: "#facc15", fontSize: 11, fontWeight: "900" },
+  updateBtnText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
   fab: {
     position: "absolute",
     right: 18,
@@ -1134,51 +1154,55 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 56,
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
     alignItems: "center",
     justifyContent: "center",
   },
-  fabText: { color: "#0b0f1a", fontSize: 28, fontWeight: "900", marginTop: -2 },
+  fabText: { color: colors.onAccent, fontSize: 28, fontWeight: "900", marginTop: -2 },
 
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: mode === "light" ? "rgba(15,23,42,0.35)" : "rgba(0,0,0,0.55)",
+    justifyContent: "flex-end",
+  },
   sheet: {
     height: "50%",
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
   },
-  sheetTitle: { color: "#fff", fontSize: 18, fontWeight: "900", marginBottom: 12 },  input: { backgroundColor: "#111827", color: "#fff", padding: 14, borderRadius: 12, marginBottom: 10 },
-  inputLabel: { color: "#94a3b8", fontSize: 12, fontWeight: "800", marginBottom: 8 },
+  sheetTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginBottom: 12 },  input: { backgroundColor: colors.surfaceAlt, color: colors.text, padding: 14, borderRadius: 12, marginBottom: 10 },
+  inputLabel: { color: colors.textMuted, fontSize: 12, fontWeight: "800", marginBottom: 8 },
   currencyRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
   currencyBtn: {
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.25)",
-    backgroundColor: "rgba(148,163,184,0.08)",
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceAlt,
   },
   currencyBtnActive: {
-    backgroundColor: "#facc15",
-    borderColor: "#facc15",
+    backgroundColor: colors.warning,
+    borderColor: colors.warning,
   },
-  currencyBtnText: { color: "#cbd5e1", fontWeight: "800", fontSize: 12 },
-  currencyBtnTextActive: { color: "#0b0f1a" },
+  currencyBtnText: { color: colors.textMuted, fontWeight: "800", fontSize: 12 },
+  currencyBtnTextActive: { color: colors.onAccent },
 
   primaryBtn: {
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
     marginTop: 4,
   },
-  primaryBtnText: { color: "#0b0f1a", fontWeight: "900" },
+  primaryBtnText: { color: colors.onAccent, fontWeight: "900" },
 
   cancelBtn: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
-  cancelText: { color: "#94a3b8", fontWeight: "800" },
-
+  cancelText: { color: colors.textMuted, fontWeight: "800" },
 });
+
 

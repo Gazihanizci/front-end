@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,10 +17,13 @@ import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import api from "../config/api";
 import MessageBox from "../components/MessageBox";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { ThemeColors, useTheme } from "../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SabitOdemeler">;
 
 export default function SabitOdemelerScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [saving, setSaving] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
   const [items, setItems] = useState<any[]>([]);
@@ -153,13 +156,13 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
         left={
           <HeaderAction
             label="Geri"
-            icon={<Ionicons name="chevron-back" size={16} color="#e5e7eb" />}
+            icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
             onPress={() => navigation.goBack()}
           />
         }
         right={
           <HeaderAction
-            icon={<Ionicons name="refresh" size={16} color="#e5e7eb" />}
+            icon={<Ionicons name="refresh" size={16} color={colors.text} />}
             onPress={fetchList}
           />
         }
@@ -176,7 +179,7 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
               value={form.odemeAdi}
               onChangeText={(v) => setForm((p) => ({ ...p, odemeAdi: v }))}
               placeholder="Örn: İnternet Faturası"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
             />
 
             <Text style={styles.label}>Son Ödeme Günü</Text>
@@ -212,14 +215,14 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
               value={form.aciklama}
               onChangeText={(v) => setForm((p) => ({ ...p, aciklama: v }))}
               placeholder="Opsiyonel"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               multiline
             />
 
             <TouchableOpacity style={styles.saveButton} activeOpacity={0.85} onPress={onCreate} disabled={saving}>
               {saving ? (
                 <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
-                  <ActivityIndicator color="#0b0f1a" />
+                  <ActivityIndicator color={colors.onAccent} />
                   <Text style={styles.saveButtonText}>Kaydediliyor...</Text>
                 </View>
               ) : (
@@ -231,8 +234,8 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
           <Text style={styles.sectionTitle}>Kayıtlar</Text>
           {loadingList ? (
             <View style={{ paddingVertical: 14, alignItems: "center" }}>
-              <ActivityIndicator color="#facc15" />
-              <Text style={{ color: "#94a3b8", marginTop: 8, fontWeight: "700" }}>Yükleniyor...</Text>
+              <ActivityIndicator color={colors.warning} />
+              <Text style={{ color: colors.textMuted, marginTop: 8, fontWeight: "700" }}>Yükleniyor...</Text>
             </View>
           ) : normalizedItems.length === 0 ? (
             <Text style={styles.emptyText}>Henüz kayıt yok.</Text>
@@ -272,29 +275,29 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0b0f1a" },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16 },
   card: {
-    backgroundColor: "#0f172a",
+    backgroundColor: colors.surface,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.15)",
+    borderColor: colors.border,
     marginBottom: 14,
   },
-  title: { color: "#e5e7eb", fontSize: 16, fontWeight: "900", marginBottom: 6 },
-  cardTitle: { color: "#e5e7eb", fontSize: 15, fontWeight: "900" },
-  sectionTitle: { color: "#e5e7eb", fontSize: 14, fontWeight: "900", marginBottom: 8 },
-  emptyText: { color: "#94a3b8", fontSize: 12, fontWeight: "700", marginBottom: 12 },
-  label: { color: "#94a3b8", fontSize: 12, fontWeight: "800", marginBottom: 4 },
+  title: { color: colors.text, fontSize: 16, fontWeight: "900", marginBottom: 6 },
+  cardTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginBottom: 8 },
+  emptyText: { color: colors.textMuted, fontSize: 12, fontWeight: "700", marginBottom: 12 },
+  label: { color: colors.textMuted, fontSize: 12, fontWeight: "800", marginBottom: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
   listHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   rowStack: { marginBottom: 10 },
-  value: { color: "#e5e7eb", fontSize: 14, fontWeight: "800" },
+  value: { color: colors.text, fontSize: 14, fontWeight: "800" },
   input: {
-    backgroundColor: "#0b1224",
-    color: "#e5e7eb",
+    backgroundColor: colors.surfaceAlt,
+    color: colors.text,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -303,7 +306,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dateInput: { flex: 1 },
-  inputText: { color: "#e5e7eb", fontSize: 14, fontWeight: "800" },
+  inputText: { color: colors.text, fontSize: 14, fontWeight: "800" },
   activeToggle: {
     minWidth: 86,
     height: 40,
@@ -313,16 +316,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   activeOn: {
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
     borderColor: "rgba(250,204,21,0.55)",
   },
   activeOff: {
-    backgroundColor: "#0b1224",
+    backgroundColor: colors.surfaceAlt,
     borderColor: "rgba(148,163,184,0.35)",
   },
   activeText: { fontSize: 12, fontWeight: "900" },
-  activeTextOn: { color: "#0b0f1a" },
-  activeTextOff: { color: "#e5e7eb" },
+  activeTextOn: { color: colors.onAccent },
+  activeTextOff: { color: colors.text },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -330,21 +333,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeActive: {
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
     borderColor: "rgba(250,204,21,0.55)",
   },
   badgeMuted: {
-    backgroundColor: "#94a3b8",
+    backgroundColor: colors.textMuted,
     borderColor: "rgba(148,163,184,0.55)",
   },
-  badgeText: { fontSize: 12, fontWeight: "900", color: "#0b0f1a" },
+  badgeText: { fontSize: 12, fontWeight: "900", color: colors.onAccent },
   textarea: { minHeight: 80, textAlignVertical: "top" },
   saveButton: {
     marginTop: 4,
-    backgroundColor: "#facc15",
+    backgroundColor: colors.warning,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
   },
-  saveButtonText: { color: "#0b0f1a", fontSize: 14, fontWeight: "900" },
+  saveButtonText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
 });
+
+

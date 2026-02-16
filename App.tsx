@@ -15,8 +15,11 @@ import TaksitOdemeScreen from "./src/screens/TaksitOdemeScreen";
 import RaporlarScreen from "./src/screens/Raporlar";
 import SabitOdemelerScreen from "./src/screens/sabit_odemeler";
 import BildirimlerScreen from "./src/screens/BildirimlerScreen";
+import HesaplarScreen from "./src/screens/HesaplarScreen";
+import YatirimAzaltScreen from "./src/screens/YatirimAzaltScreen";
 import { getToken, onAuthTokenChanged } from "./src/utils/authStorage";
 import { navigationRef } from "./src/navigation/navigationRef";
+import { ThemeProvider } from "./src/theme/theme";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -31,6 +34,8 @@ export type RootStackParamList = {
   Raporlar: undefined;
   SabitOdemeler: undefined;
   Bildirimler: undefined;
+  Hesaplar: undefined;
+  YatirimAzalt: { yatirimId: number; hesapAdi: string; varlikTuru: "USD" | "EUR" | "ALTIN" | "TL" };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -69,28 +74,32 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!isAuthed ? (
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-          </>
-        ) : (
-          <>
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="Menu" component={MenuScreen} />
-            <Stack.Screen name="FamilyAccount" component={FamilyScreen} />
-            <Stack.Screen name="Categories" component={kategoriler} />
-            <Stack.Screen name="Islemler" component={IslemlerScreen} />
-            <Stack.Screen name="AileCuzdani" component={AileCuzdaniScreen} />
-            <Stack.Screen name="TaksitOdeme" component={TaksitOdemeScreen} />
-            <Stack.Screen name="Raporlar" component={RaporlarScreen} />
-            <Stack.Screen name="SabitOdemeler" component={SabitOdemelerScreen} />
-            <Stack.Screen name="Bildirimler" component={BildirimlerScreen} />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <ThemeProvider>
+      <NavigationContainer ref={navigationRef}>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {!isAuthed ? (
+            <>
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="Menu" component={MenuScreen} />
+              <Stack.Screen name="FamilyAccount" component={FamilyScreen} />
+              <Stack.Screen name="Categories" component={kategoriler} />
+              <Stack.Screen name="Islemler" component={IslemlerScreen} />
+              <Stack.Screen name="AileCuzdani" component={AileCuzdaniScreen} />
+              <Stack.Screen name="TaksitOdeme" component={TaksitOdemeScreen} />
+              <Stack.Screen name="Raporlar" component={RaporlarScreen} />
+              <Stack.Screen name="SabitOdemeler" component={SabitOdemelerScreen} />
+              <Stack.Screen name="Bildirimler" component={BildirimlerScreen} />
+              <Stack.Screen name="Hesaplar" component={HesaplarScreen} />
+              <Stack.Screen name="YatirimAzalt" component={YatirimAzaltScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </ThemeProvider>
   );
 }

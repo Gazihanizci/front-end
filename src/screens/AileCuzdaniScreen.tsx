@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -17,6 +18,11 @@ import api from "../config/api";
 import { RootStackParamList } from "../../App";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import { ThemeColors, useTheme } from "../theme/theme";
+import {
+  getStatus,
+  requestPermission,
+  PermissionStatus,
+} from "../services/familyPermissionApi";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AileCuzdani">;
 
@@ -122,6 +128,47 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
   const [memberCategoryRaw, setMemberCategoryRaw] = useState<UyeKategoriDagilimItem[]>([]);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>("NONE");
+  const [permissionLoading, setPermissionLoading] = useState(true);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [permissionBusy, setPermissionBusy] = useState(false);
+
+  const fetchPermissionStatus = useCallback(async () => {
+    setPermissionLoading(true);
+    setPermissionError(null);
+    try {
+      const res = await getStatus();
+      setPermissionStatus(res.status);
+      return res.status;
+    } catch (err: any) {
+      console.log("İzin durumu hata:", err?.response?.data || err?.message);
+      setPermissionError("İzin durumu alınamadı.");
+      setPermissionStatus("NONE");
+      return "NONE" as PermissionStatus;
+    } finally {
+      setPermissionLoading(false);
+    }
+  }, []);
+
+  const sendPermissionRequest = useCallback(async () => {
+    if (permissionBusy) return;
+    setPermissionBusy(true);
+    setPermissionError(null);
+    try {
+      const res = await requestPermission();
+      setPermissionStatus(res.status === "APPROVED" ? "APPROVED" : "PENDING");
+    } catch (err: any) {
+      const status = err?.response?.status;
+      console.log("İzin isteği hata:", status, err?.response?.data || err?.message);
+      if (status === 409) {
+        setPermissionStatus("PENDING");
+      } else {
+        setPermissionError("İzin isteği gönderilemedi.");
+      }
+    } finally {
+      setPermissionBusy(false);
+    }
+  }, [permissionBusy]);
 
   const fetchFamilyWalletMonthly = useCallback(async () => {
     setLoadingAnaliz(true);
@@ -202,17 +249,31 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
   }, []);
 
   useEffect(() => {
-    fetchFamilyWalletMonthly();
-  }, [fetchFamilyWalletMonthly]);
+    fetchPermissionStatus();
+  }, [fetchPermissionStatus]);
+
+  useEffect(() => {
+    if (permissionLoading) return;
+    if (permissionStatus === "APPROVED") {
+      fetchFamilyWalletMonthly();
+      return;
+    }
+    setLoadingAnaliz(false);
+    setLoadingCategorySummary(false);
+    setLoadingMembers(false);
+  }, [fetchFamilyWalletMonthly, permissionLoading, permissionStatus]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetchFamilyWalletMonthly();
+      const status = await fetchPermissionStatus();
+      if (status === "APPROVED") {
+        await fetchFamilyWalletMonthly();
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [fetchFamilyWalletMonthly]);
+  }, [fetchFamilyWalletMonthly, fetchPermissionStatus]);
 
   const totalIncome = analiz?.aylikGelir ?? 0;
   const totalExpense = analiz?.aylikGider ?? 0;
@@ -258,6 +319,7 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
         : ["#38bdf8", "#22c55e", "#facc15", "#fb7185", "#a78bfa", "#f97316"],
     [mode]
   );
+  const canShowWallet = permissionStatus === "APPROVED";
 
   const memberCategoryGroups = useMemo(() => {
     const map = new Map<
@@ -450,6 +512,41 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.warning} />
         }
       >
+        {permissionLoading ? (
+          <View style={styles.permissionCard}>
+            <View style={styles.loadingInline}>
+              <ActivityIndicator color={colors.warning} />
+              <Text style={styles.loadingText}>İzin kontrol ediliyor...</Text>
+            </View>
+          </View>
+        ) : !canShowWallet ? (
+          <View style={styles.permissionCard}>
+            <Text style={styles.permissionTitle}>Aile Cüzdanı İzni</Text>
+            {permissionError ? (
+              <Text style={styles.permissionError}>{permissionError}</Text>
+            ) : permissionStatus === "PENDING" ? (
+              <Text style={styles.permissionSub}>İsteğin beklemede.</Text>
+            ) : (
+              <Text style={styles.permissionSub}>
+                Aile cüzdanını görüntülemek için izin almalısın.
+              </Text>
+            )}
+
+            {(permissionStatus === "NONE" || permissionStatus === "REJECTED") && (
+              <TouchableOpacity
+                style={[styles.permissionBtn, permissionBusy && { opacity: 0.6 }]}
+                onPress={sendPermissionRequest}
+                activeOpacity={0.85}
+                disabled={permissionBusy}
+              >
+                <Text style={styles.permissionBtnText}>
+                  {permissionBusy ? "Gönderiliyor..." : "İzin İste"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <>
         <View style={styles.heroCard}>
           <View style={styles.heroHeader}>
             <View>
@@ -771,6 +868,8 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
             />
           )}
         </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -948,6 +1047,26 @@ const createStyles = (colors: ThemeColors) =>
     loadingInline: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 },
     loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
     emptyText: { color: colors.textMuted, fontSize: 12, fontWeight: "700", marginTop: 10 },
+    permissionCard: {
+      marginHorizontal: 16,
+      marginTop: 16,
+      padding: 16,
+      borderRadius: 18,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    permissionTitle: { color: colors.text, fontSize: 16, fontWeight: "900", marginBottom: 6 },
+    permissionSub: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
+    permissionError: { color: colors.danger, fontSize: 12, fontWeight: "800", marginBottom: 8 },
+    permissionBtn: {
+      marginTop: 12,
+      backgroundColor: colors.warning,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    permissionBtnText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
   });
 
 

@@ -28,7 +28,7 @@ type UserInfo = {
 };
 
 export default function MenuScreen({ navigation }: Props) {
-  const { colors, mode, setMode } = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [logoutVisible, setLogoutVisible] = useState(false);
 
@@ -89,7 +89,11 @@ export default function MenuScreen({ navigation }: Props) {
       icon: <Ionicons name="archive-outline" size={22} color={colors.accent} />,
     },
     { title: "Notlar", icon: <Ionicons name="clipboard-outline" size={22} color={colors.warning} /> },
-    { title: "Ayarlar", icon: <Ionicons name="settings-outline" size={22} color={colors.accent} /> },
+    {
+      title: "Ayarlar",
+      icon: <Ionicons name="settings-outline" size={22} color={colors.accent} />,
+      onPress: () => navigation.navigate("Settings"),
+    },
   ];
 
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -154,33 +158,6 @@ export default function MenuScreen({ navigation }: Props) {
           </View>
         </View>
 
-        <View style={styles.themeCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.themeTitle}>Tema Modu</Text>
-            <Text style={styles.themeSubtitle}>Koyu veya açık görünüm</Text>
-          </View>
-          <View style={styles.themeButtons}>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => setMode("dark")}
-              style={[styles.themeButton, mode === "dark" && styles.themeButtonActive]}
-            >
-              <Text style={[styles.themeButtonText, mode === "dark" && styles.themeButtonTextActive]}>
-                Koyu
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => setMode("light")}
-              style={[styles.themeButton, mode === "light" && styles.themeButtonActive]}
-            >
-              <Text style={[styles.themeButtonText, mode === "light" && styles.themeButtonTextActive]}>
-                Açık
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {menuItems.map((item, index) => {
           const isFamily = item.title === "Aile Hesabı";
           const aileDurum = userInfo?.aileId ? "AKTİF" : "YOK";
@@ -225,7 +202,11 @@ export default function MenuScreen({ navigation }: Props) {
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.menuItem}
+          activeOpacity={0.7}
+          onPress={() => navigation.navigate("Settings")}
+        >
           <View style={styles.iconBox}>
             <Ionicons name="settings-outline" size={22} color={colors.text} />
           </View>
@@ -386,33 +367,5 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "800",
     },
 
-    themeCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 18,
-      padding: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: 14,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-    },
-    themeTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
-    themeSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: "700" },
-    themeButtons: { flexDirection: "row", gap: 8 },
-    themeButton: {
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-      backgroundColor: colors.surfaceAlt,
-    },
-    themeButtonActive: {
-      backgroundColor: colors.warning,
-      borderColor: colors.warning,
-    },
-    themeButtonText: { color: colors.text, fontSize: 12, fontWeight: "800" },
-    themeButtonTextActive: { color: colors.onAccent },
   });
 

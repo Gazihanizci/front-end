@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // NOTE: For production, consider using SecureStore/Keychain for token storage.
-const TOKEN_KEY = "ACCESS_TOKEN";
+const TOKEN_KEY = "token";
 const PROFILE_KEY = "AUTH_PROFILE";
 
 export type Profile = {

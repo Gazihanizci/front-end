@@ -84,15 +84,11 @@ export default function MenuScreen({ navigation }: Props) {
       icon: <Ionicons name="pie-chart-outline" size={22} color={colors.accent} />,
       onPress: () => navigation.navigate("Raporlar"),
     },
+   
     {
-      title: "Arşiv / Silinen",
-      icon: <Ionicons name="archive-outline" size={22} color={colors.accent} />,
-    },
-    { title: "Notlar", icon: <Ionicons name="clipboard-outline" size={22} color={colors.warning} /> },
-    {
-      title: "Ayarlar",
-      icon: <Ionicons name="settings-outline" size={22} color={colors.accent} />,
-      onPress: () => navigation.navigate("Settings"),
+      title: "Notlar",
+      icon: <Ionicons name="clipboard-outline" size={22} color={colors.warning} />,
+      onPress: () => navigation.navigate("Notlar"),
     },
   ];
 
@@ -215,27 +211,6 @@ export default function MenuScreen({ navigation }: Props) {
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
-          <View style={styles.iconBox}>
-            <Ionicons name="help-circle-outline" size={22} color={colors.text} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.menuText}>Yardım</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
-          <View style={styles.iconBox}>
-            <Feather name="message-circle" size={22} color={colors.text} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.menuText}>Bize Yazın</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
-
         <View style={styles.divider} />
 
         <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.85} onPress={handleLogout}>

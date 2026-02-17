@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -90,6 +91,8 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
   const [msgTitle, setMsgTitle] = useState("");
   const [msgMessage, setMsgMessage] = useState("");
   const [msgType, setMsgType] = useState<"success" | "error" | "info">("info");
+  const [finishingId, setFinishingId] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
   const [cancelAction, setCancelAction] = useState<(() => void) | null>(null);
   const [confirmText, setConfirmText] = useState<string | undefined>(undefined);
@@ -183,6 +186,15 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
     }
   }, []);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchMy();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchMy]);
+
   useEffect(() => {
     fetchMy();
   }, [fetchMy]);
@@ -253,24 +265,27 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
     async (taksitId?: number) => {
       if (!taksitId) return;
 
-      showConfirm("Taksiti Bitir", "Bu taksiti bitirmek istiyor musun?", async () => {
+      showConfirm(
+        "Taksiti Hemen Bitir",
+        "Bu taksiti tek seferde kapatmak istiyor musun? (Toplam gider backend’de hesaplanacak)",
+        async () => {
+          if (finishingId != null) return;
+          setFinishingId(taksitId);
         try {
 
-          await api.patch(`/api/taksitler/${taksitId}/finish`, null);
+          await api.post(`/api/taksitler/${taksitId}/finish-now`, null);
 
           await fetchMy();
-          showMessage("Başarılı", "Taksit bitirildi.", "success");
+          showMessage("Başarılı", "Taksit kapatıldı.", "success");
         } catch (err: any) {
           console.log("Taksit bitir hata:", err?.response?.data || err?.message);
-          showMessage(
-            "Uyarı",
-            "Taksit bitirme endpoint'i backendinde yoksa bu istek başarısız olur. İstersen endpoint yazalım.",
-            "info"
-          );
+          showMessage("Hata", "Taksit kapatılamadı.", "error");
+        } finally {
+          setFinishingId(null);
         }
       });
     },
-    [fetchMy, showConfirm, showMessage]
+    [fetchMy, showConfirm, showMessage, finishingId]
   );
 
   const normalizedItems = useMemo(() => {
@@ -309,7 +324,13 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
       />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.warning} />
+          }
+        >
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Yeni Taksit Kaydı</Text>
 
@@ -397,9 +418,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
               )}
             </TouchableOpacity>
 
-            <Text style={styles.hintText}>
-              Not: Backend her ay bu â€œAylık Tutarâ€ı otomatik olarak İşlemlerâ€™e â€œDiğer Giderlerâ€ olarak düşer.
-            </Text>
+
           </View>
 
           <Text style={styles.sectionTitle}>Kayıtlar</Text>
@@ -414,9 +433,12 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
           ) : (
             normalizedItems.map((item) => (
               <View key={String(item.id)} style={styles.card}>
-                <Text style={styles.cardTitle}>
-                  {item.title} {item.bittiMi ? " (Bitti)" : ""}
-                </Text>
+                <View style={styles.listHeader}>
+                  <Text style={styles.cardTitle}>{item.title}</Text>
+                  <View style={[styles.badge, item.bittiMi ? styles.badgeDone : styles.badgeActive]}>
+                    <Text style={styles.badgeText}>{item.bittiMi ? "Bitti" : "Aktif"}</Text>
+                  </View>
+                </View>
 
                 <View style={styles.row}>
                   <Text style={styles.label}>Aylık Tutar</Text>
@@ -443,8 +465,17 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
                 </View>
 
                 {!item.bittiMi && (
-                  <TouchableOpacity style={styles.endButton} activeOpacity={0.85} onPress={() => onFinish(item.id)}>
-                    <Text style={styles.endButtonText}>Bitiş</Text>
+                  <TouchableOpacity
+                    style={[styles.endButton, finishingId === item.id && { opacity: 0.6 }]}
+                    activeOpacity={0.85}
+                    onPress={() => onFinish(item.id)}
+                    disabled={finishingId === item.id}
+                  >
+                    {finishingId === item.id ? (
+                      <ActivityIndicator color={colors.onAccent} />
+                    ) : (
+                      <Text style={styles.endButtonText}>Taksiti Hemen Bitir</Text>
+                    )}
                   </TouchableOpacity>
                 )}
               </View>
@@ -524,6 +555,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginBottom: 8 },
   emptyText: { color: colors.textMuted, fontSize: 12, fontWeight: "700", marginBottom: 12 },
 
+  listHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  badgeActive: {
+    backgroundColor: colors.warning,
+    borderColor: "rgba(250,204,21,0.55)",
+  },
+  badgeDone: {
+    backgroundColor: colors.textMuted,
+    borderColor: "rgba(148,163,184,0.55)",
+  },
+  badgeText: { fontSize: 12, fontWeight: "900", color: colors.onAccent },
+
   endButton: {
     marginTop: 8,
     backgroundColor: colors.danger,
@@ -533,5 +581,3 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   endButtonText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
 });
-
-

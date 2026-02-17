@@ -51,6 +51,19 @@ type CategorySummaryItem = {
   tip: "GIDER" | "GELIR";
   toplamTutar: number;
 };
+type YatirimGraphPointDto = {
+  label: string;
+  toplamMaliyet: string;
+  guncelDeger: string;
+  karZarar: string;
+};
+type YatirimGraphResponse = {
+  toplamMaliyet: string;
+  toplamGuncelDeger: string;
+  toplamKarZarar: string;
+  points: YatirimGraphPointDto[];
+};
+type GraphGroupBy = "HESAP" | "VARLIK";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 export default function HomeScreen({ navigation }: Props) {
@@ -86,6 +99,11 @@ export default function HomeScreen({ navigation }: Props) {
   const [marketSource, setMarketSource] = useState<string | null>(null);
   const [categorySummary, setCategorySummary] = useState<CategorySummaryItem[]>([]);
   const [loadingCategorySummary, setLoadingCategorySummary] = useState(true);
+  const [graphGroupBy, setGraphGroupBy] = useState<GraphGroupBy>("HESAP");
+  const [graphData, setGraphData] = useState<YatirimGraphResponse | null>(null);
+  const [graphLoading, setGraphLoading] = useState(true);
+  const [graphError, setGraphError] = useState<string | null>(null);
+  const [graphShowAll, setGraphShowAll] = useState(false);
 
   // =========================
   // ✅ HELPERS
@@ -95,6 +113,22 @@ export default function HomeScreen({ navigation }: Props) {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+  const formatCompact = (n: number) => {
+    const v = Number.isFinite(n) ? n : 0;
+    const abs = Math.abs(v);
+    if (abs >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}B`;
+    if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+    if (abs >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+    return formatTRY(v);
+  };
+  const toNum = (v: any) => {
+    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+    if (typeof v === "string") {
+      const n = Number(v.replace(",", "."));
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  };
   const formatRateValue = (n?: number) =>
     Number.isFinite(n) ? `₺ ${formatTRY(n as number)}` : "—";
   const marketBaseUrl = useMemo(() => {
@@ -216,6 +250,19 @@ export default function HomeScreen({ navigation }: Props) {
     if (!marketTs) return null;
     return new Date(marketTs * 1000).toLocaleString("tr-TR");
   }, [marketTs]);
+  const graphPoints = graphData?.points ?? [];
+  const graphVisiblePoints = graphShowAll ? graphPoints : graphPoints.slice(0, 10);
+  const graphChartData = graphVisiblePoints.map((p) => toNum(p.karZarar));
+  const graphLabels = graphVisiblePoints.map((p) => p.label);
+  const graphMax = Math.max(0, ...graphChartData.map((v) => Math.abs(v)));
+  const chipIntensity = (v: number) => {
+    if (graphMax <= 0) return 0;
+    return Math.min(1, Math.abs(v) / graphMax);
+  };
+  const totalMaliyet = toNum(graphData?.toplamMaliyet);
+  const totalGuncel = toNum(graphData?.toplamGuncelDeger);
+  const totalKarZarar = toNum(graphData?.toplamKarZarar);
+  const karZararPositive = totalKarZarar >= 0;
 
   // =========================
   // ✅ FETCH: ACCOUNTS
@@ -317,6 +364,20 @@ export default function HomeScreen({ navigation }: Props) {
     setLoadingCategorySummary(false);
   }
 }, []);
+  const fetchYatirimGraph = useCallback(async (groupBy: GraphGroupBy) => {
+  setGraphLoading(true);
+  setGraphError(null);
+  try {
+    const res = await api.get("/api/yatirim/graph", { params: { groupBy } });
+    setGraphData(res.data ?? null);
+  } catch (err: any) {
+    console.log("Yatırım graph hata:", err?.response?.data || err?.message);
+    setGraphError("Yatırım grafiği yüklenemedi.");
+    setGraphData(null);
+  } finally {
+    setGraphLoading(false);
+  }
+}, []);
   // =========================
   // ✅ EFFECTS
   // =========================
@@ -326,7 +387,16 @@ export default function HomeScreen({ navigation }: Props) {
     fetchUserInfo();
     fetchMarket();
     fetchCategorySummaryMonthly();
-  }, [fetchAccounts, fetchSon6Ay, fetchUserInfo, fetchMarket, fetchCategorySummaryMonthly]);
+    fetchYatirimGraph(graphGroupBy);
+  }, [
+    fetchAccounts,
+    fetchSon6Ay,
+    fetchUserInfo,
+    fetchMarket,
+    fetchCategorySummaryMonthly,
+    fetchYatirimGraph,
+    graphGroupBy,
+  ]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -337,11 +407,20 @@ export default function HomeScreen({ navigation }: Props) {
         fetchUserInfo(),
         fetchMarket(),
         fetchCategorySummaryMonthly(),
+        fetchYatirimGraph(graphGroupBy),
       ]);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchAccounts, fetchSon6Ay, fetchUserInfo, fetchMarket, fetchCategorySummaryMonthly]);
+  }, [
+    fetchAccounts,
+    fetchSon6Ay,
+    fetchUserInfo,
+    fetchMarket,
+    fetchCategorySummaryMonthly,
+    fetchYatirimGraph,
+    graphGroupBy,
+  ]);
 
   // son6Ay gelince donut için analiz seç
 useEffect(() => {
@@ -751,6 +830,156 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           </View>
         </View>
 
+        {/* YATIRIM GRAFİĞİ */}
+        <View style={styles.card}>
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.cardTitle}>Yatırım Grafiği</Text>
+              <Text style={styles.cardSubtitle}>Portföy özeti</Text>
+            </View>
+            <View style={styles.sectionBadge}>
+              <Text style={styles.sectionBadgeText}>{graphGroupBy}</Text>
+            </View>
+          </View>
+
+          <View style={styles.segmentWrap}>
+            <TouchableOpacity
+              style={[styles.segmentBtn, graphGroupBy === "HESAP" && styles.segmentBtnActive]}
+              onPress={() => setGraphGroupBy("HESAP")}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.segmentText, graphGroupBy === "HESAP" && styles.segmentTextActive]}>
+                Hesap
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.segmentBtn, graphGroupBy === "VARLIK" && styles.segmentBtnActive]}
+              onPress={() => setGraphGroupBy("VARLIK")}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.segmentText, graphGroupBy === "VARLIK" && styles.segmentTextActive]}>
+                Varlık
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {graphLoading ? (
+            <View style={styles.loadingInline}>
+              <ActivityIndicator color={colors.warning} />
+              <Text style={styles.loadingText}>Yükleniyor...</Text>
+            </View>
+          ) : graphError ? (
+            <Text style={styles.errorText}>{graphError}</Text>
+          ) : (
+            <>
+              <View style={styles.graphKpiRow}>
+                <View style={styles.graphKpiCard}>
+                  <Text style={styles.graphKpiLabel}>Toplam Maliyet</Text>
+                  <Text style={styles.graphKpiValue}>₺ {formatTRY(totalMaliyet)}</Text>
+                </View>
+                <View style={styles.graphKpiCard}>
+                  <Text style={styles.graphKpiLabel}>Toplam Güncel</Text>
+                  <Text style={styles.graphKpiValue}>₺ {formatTRY(totalGuncel)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.graphKpiWide}>
+                <Text style={styles.graphKpiLabel}>Toplam Kâr/Zarar</Text>
+                <View style={styles.karRow}>
+                  <Text style={[styles.graphKpiValue, karZararPositive ? styles.karUp : styles.karDown]}>
+                    ₺ {formatTRY(totalKarZarar)}
+                  </Text>
+                  <View style={[styles.karBadge, karZararPositive ? styles.karBadgeUp : styles.karBadgeDown]}>
+                    <Text style={styles.karBadgeText}>{karZararPositive ? "Kâr" : "Zarar"}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.chartCard}>
+                <Text style={styles.chartTitle}>Kâr/Zarar Dağılımı</Text>
+                {graphChartData.length === 0 ? (
+                  <Text style={styles.chartEmpty}>Grafik verisi yok.</Text>
+                ) : (
+                  <View style={styles.chipGrid}>
+                    {graphVisiblePoints.map((p, i) => {
+                      const v = toNum(p.karZarar);
+                      const intensity = chipIntensity(v);
+                      return (
+                        <View
+                          key={`${p.label}-${i}`}
+                          style={[
+                            styles.chip,
+                            v >= 0 ? styles.chipPos : styles.chipNeg,
+                            { opacity: 0.35 + intensity * 0.65 },
+                          ]}
+                        >
+                          <Text style={styles.chipLabel} numberOfLines={1}>
+                            {p.label}
+                          </Text>
+                          <Text style={styles.chipValue}>₺ {formatTRY(v)}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.graphListHeader}>
+                <View style={styles.graphHeaderLeft}>
+                  <Text style={styles.graphListTitle}>Detaylar</Text>
+                  <View style={styles.graphCountBadge}>
+                    <Text style={styles.graphCountText}>{graphPoints.length}</Text>
+                  </View>
+                </View>
+                {graphPoints.length > 10 && (
+                  <TouchableOpacity onPress={() => setGraphShowAll((p) => !p)} activeOpacity={0.85}>
+                    <Text style={styles.graphLink}>{graphShowAll ? "İlk 10" : "Tümü"}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.graphDetailCarousel}
+              >
+                {graphVisiblePoints.map((p, idx) => {
+                  const kz = toNum(p.karZarar);
+                  return (
+                    <View key={`${p.label}-${idx}`} style={styles.graphDetailCard}>
+                      <View style={styles.graphDetailHeader}>
+                        <Text style={styles.graphDetailTitle} numberOfLines={2}>
+                          {p.label}
+                        </Text>
+                        <View style={[styles.karBadge, kz >= 0 ? styles.karBadgeUp : styles.karBadgeDown]}>
+                          <Text style={styles.karBadgeText}>{kz >= 0 ? "Kâr" : "Zarar"}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.graphMetricRow}>
+                        <View style={styles.graphMetricPill}>
+                          <Text style={styles.graphMetricLabel}>Maliyet</Text>
+                          <Text style={styles.graphMetricValue}>₺ {formatCompact(toNum(p.toplamMaliyet))}</Text>
+                        </View>
+                        <View style={styles.graphMetricPill}>
+                          <Text style={styles.graphMetricLabel}>Güncel</Text>
+                          <Text style={styles.graphMetricValue}>₺ {formatCompact(toNum(p.guncelDeger))}</Text>
+                        </View>
+                        <View style={styles.graphMetricPill}>
+                          <Text style={styles.graphMetricLabel}>K/Z</Text>
+                          <Text style={[styles.graphMetricValue, kz >= 0 ? styles.kzUp : styles.kzDown]}>
+                            ₺ {formatCompact(kz)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
+        </View>
+
         {/* HESAPLARIM */}
         <View style={styles.card}>
           <View style={styles.sectionHeaderRow}>
@@ -770,33 +999,42 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
               Hesap yok. + ile ekleyebilirsin.
             </Text>
           ) : (
-            <View style={{ marginTop: 10, gap: 10 }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.accountCarousel}
+            >
               {accounts.map((a) => (
-                <TouchableOpacity key={a.id} style={styles.accountCard} activeOpacity={0.8}>
-                  <View style={styles.accountIcon}>
-                    <Text style={styles.accountIconText}>{a.name.slice(0, 1).toUpperCase()}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.accountName}>{a.name}</Text>
-                    <Text style={styles.accountSub}>Bakiye</Text>
-                  </View>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text style={styles.accountBalance}>
-                        {formatTRY(a.balance)}
-                        {a.currency}
-                      </Text>
-                      <Text style={styles.accountCurrency}>{a.currency.trim()}</Text>
-                      <TouchableOpacity
-                        style={styles.updateBtn}
-                        onPress={() => openBalanceModal(a)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.updateBtnText}>Güncelle</Text>
-                      </TouchableOpacity>
+                <TouchableOpacity key={a.id} style={styles.accountCardH} activeOpacity={0.8}>
+                  <View style={styles.accountTopRow}>
+                    <View style={styles.accountIcon}>
+                      <Text style={styles.accountIconText}>{a.name.slice(0, 1).toUpperCase()}</Text>
                     </View>
+                    <View style={styles.accountBadge}>
+                      <Text style={styles.accountBadgeText}>{a.currency.trim()}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.accountName} numberOfLines={1}>
+                    {a.name}
+                  </Text>
+                  <Text style={styles.accountSub}>Bakiye</Text>
+
+                  <Text style={styles.accountBalance}>
+                    {formatTRY(a.balance)}
+                    {a.currency}
+                  </Text>
+
+                  <TouchableOpacity
+                    style={styles.updateBtn}
+                    onPress={() => openBalanceModal(a)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.updateBtnText}>Güncelle</Text>
                   </TouchableOpacity>
-                ))}
-            </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           )}
         </View>
       </ScrollView>
@@ -1020,6 +1258,8 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   legendSwatchIncome: { width: 12, height: 12, borderRadius: 4, backgroundColor: colors.warning },
   legendSwatchExpense: { width: 12, height: 12, borderRadius: 4, backgroundColor: colors.danger },
   legendText2: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
+  loadingInline: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 },
+  loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
   categoryDonutRow: {
     marginTop: 12,
     flexDirection: "row",
@@ -1114,7 +1354,8 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   rateCode: { color: colors.textMuted, fontSize: 12, fontWeight: "800", flexShrink: 1 },
   rateValue: { marginTop: 8, color: colors.text, fontSize: 16, fontWeight: "900" },
   rateChangeUp: { marginTop: 4, color: colors.success, fontSize: 12, fontWeight: "800" },
-  rateChangeDown: { marginTop: 4, color: colors.danger, fontSize: 12, fontWeight: "800" },  accountCard: {
+  rateChangeDown: { marginTop: 4, color: colors.danger, fontSize: 12, fontWeight: "800" },
+  accountCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -1137,6 +1378,25 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   accountSub: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: "700" },
   accountBalance: { color: colors.text, fontSize: 16, fontWeight: "900" },
   accountCurrency: { color: colors.textMuted, fontSize: 12, marginTop: 2, fontWeight: "700" },
+  accountCarousel: { marginTop: 10, paddingRight: 16, gap: 12 },
+  accountCardH: {
+    width: 240,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  accountTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  accountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
+  accountBadgeText: { color: colors.text, fontSize: 11, fontWeight: "900" },
   updateBtn: {
     marginTop: 8,
     paddingVertical: 6,
@@ -1203,6 +1463,124 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
 
   cancelBtn: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
   cancelText: { color: colors.textMuted, fontWeight: "800" },
+  errorText: { color: colors.danger, fontSize: 12, fontWeight: "800", marginTop: 8 },
+  segmentWrap: {
+    marginTop: 12,
+    flexDirection: "row",
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 4,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  segmentBtnActive: { backgroundColor: colors.surface },
+  segmentText: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
+  segmentTextActive: { color: colors.text },
+  graphKpiRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  graphKpiCard: {
+    flex: 1,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  graphKpiWide: {
+    marginTop: 10,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  graphKpiLabel: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
+  graphKpiValue: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 6 },
+  karRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
+  karUp: { color: colors.success },
+  karDown: { color: colors.danger },
+  karBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  karBadgeUp: { backgroundColor: colors.success, borderColor: colors.success },
+  karBadgeDown: { backgroundColor: colors.danger, borderColor: colors.danger },
+  karBadgeText: { color: colors.onAccent, fontSize: 11, fontWeight: "900" },
+  chartCard: {
+    marginTop: 12,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chartTitle: { color: colors.text, fontSize: 12, fontWeight: "900", marginBottom: 6 },
+  chartEmpty: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
+  chipGrid: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    width: "48%",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
+  chipPos: { backgroundColor: colors.success },
+  chipNeg: { backgroundColor: colors.danger },
+  chipLabel: { color: colors.onAccent, fontSize: 11, fontWeight: "900" },
+  chipValue: { color: colors.onAccent, fontSize: 12, fontWeight: "800", marginTop: 6 },
+  graphListHeader: {
+    marginTop: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  graphHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  graphListTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  graphCountBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
+  graphCountText: { color: colors.text, fontSize: 11, fontWeight: "900" },
+  graphLink: { color: colors.warning, fontSize: 12, fontWeight: "900" },
+  graphDetailCarousel: { marginTop: 8, paddingRight: 16, gap: 12 },
+  graphDetailCard: {
+    width: 260,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  graphDetailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  graphDetailTitle: { flex: 1, color: colors.text, fontSize: 13, fontWeight: "900" },
+  graphMetricRow: { flexDirection: "row", gap: 8, marginTop: 10 },
+  graphMetricPill: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
+  graphMetricLabel: { color: colors.textMuted, fontSize: 10, fontWeight: "800" },
+  graphMetricValue: { color: colors.text, fontSize: 12, fontWeight: "900", marginTop: 4 },
+  kzUp: { color: colors.success },
+  kzDown: { color: colors.danger },
 });
 
 

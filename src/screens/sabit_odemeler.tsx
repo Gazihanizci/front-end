@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +19,7 @@ import api from "../config/api";
 import MessageBox from "../components/MessageBox";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { ThemeColors, useTheme } from "../theme/theme";
+import { aktifeAl, getAll, pasifeCek } from "../services/sabitOdemeApi";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SabitOdemeler">;
 
@@ -26,6 +28,9 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [saving, setSaving] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [islemYapilanId, setIslemYapilanId] = useState<number | null>(null);
   const [items, setItems] = useState<any[]>([]);
   const [form, setForm] = useState({
     odemeAdi: "",
@@ -79,13 +84,14 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
 
   const fetchList = useCallback(async () => {
     setLoadingList(true);
+    setError(null);
     try {
-      const res = await api.get("/api/sabitodemeler");
-      const arr = Array.isArray(res.data) ? res.data : [];
-      setItems(arr);
+      const arr = await getAll();
+      setItems(arr || []);
     } catch (err: any) {
       console.log("Sabit ödeme listeleme hata:", err?.response?.data || err?.message);
       setItems([]);
+      setError("Kayıtlar yüklenemedi.");
     } finally {
       setLoadingList(false);
     }
@@ -148,6 +154,36 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
     }));
   }, [items]);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchList();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchList]);
+
+  const toggleAktif = useCallback(
+    async (odemeId: number, aktif: boolean) => {
+      if (islemYapilanId != null) return;
+      setIslemYapilanId(odemeId);
+      try {
+        if (aktif) {
+          await pasifeCek(odemeId);
+        } else {
+          await aktifeAl(odemeId);
+        }
+        await fetchList();
+      } catch (err: any) {
+        console.log("Sabit ödeme durum güncelleme hata:", err?.response?.data || err?.message);
+        showMessage("Hata", "Durum güncellenemedi.", "error");
+      } finally {
+        setIslemYapilanId(null);
+      }
+    },
+    [fetchList, islemYapilanId, showMessage]
+  );
+
   return (
     <View style={styles.container}>
       <ScreenHeader
@@ -169,7 +205,13 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
       />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.warning} />
+          }
+        >
           <View style={styles.card}>
             <Text style={styles.title}>Yeni Sabit Ödeme</Text>
 
@@ -237,6 +279,8 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
               <ActivityIndicator color={colors.warning} />
               <Text style={{ color: colors.textMuted, marginTop: 8, fontWeight: "700" }}>Yükleniyor...</Text>
             </View>
+          ) : error ? (
+            <Text style={styles.emptyText}>{error}</Text>
           ) : normalizedItems.length === 0 ? (
             <Text style={styles.emptyText}>Henüz kayıt yok.</Text>
           ) : (
@@ -258,6 +302,19 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
                   <Text style={styles.label}>Açıklama</Text>
                   <Text style={styles.value}>{item.aciklama || "-"}</Text>
                 </View>
+
+                <TouchableOpacity
+                  style={[styles.toggleBtn, islemYapilanId === item.odemeId && { opacity: 0.6 }]}
+                  activeOpacity={0.85}
+                  onPress={() => toggleAktif(item.odemeId, item.aktif)}
+                  disabled={islemYapilanId === item.odemeId}
+                >
+                  {islemYapilanId === item.odemeId ? (
+                    <ActivityIndicator color={colors.onAccent} />
+                  ) : (
+                    <Text style={styles.toggleBtnText}>{item.aktif ? "Pasife Çek" : "Aktife Al"}</Text>
+                  )}
+                </TouchableOpacity>
               </View>
             ))
           )}
@@ -333,8 +390,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: 1,
   },
   badgeActive: {
-    backgroundColor: colors.warning,
-    borderColor: "rgba(250,204,21,0.55)",
+    backgroundColor: colors.success,
+    borderColor: "rgba(34,197,94,0.55)",
   },
   badgeMuted: {
     backgroundColor: colors.textMuted,
@@ -342,6 +399,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   badgeText: { fontSize: 12, fontWeight: "900", color: colors.onAccent },
   textarea: { minHeight: 80, textAlignVertical: "top" },
+  toggleBtn: {
+    marginTop: 6,
+    backgroundColor: colors.warning,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  toggleBtnText: { color: colors.onAccent, fontSize: 13, fontWeight: "900" },
   saveButton: {
     marginTop: 4,
     backgroundColor: colors.warning,

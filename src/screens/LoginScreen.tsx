@@ -15,7 +15,7 @@ import {
 import api from "../config/api";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
-import { saveProfile, saveToken } from "../utils/authStorage";
+import { saveProfile, setTokens } from "../utils/authStorage";
 import MessageBox from "../components/MessageBox";
 import { ThemeColors, useTheme } from "../theme/theme";
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
@@ -25,6 +25,7 @@ type AuthResponse = {
   kullaniciId: number;
   email: string;
   accessToken: string;
+  refreshToken: string;
   tokenType: "Bearer";
 };
 
@@ -42,7 +43,11 @@ export default function LoginScreen({ navigation }: Props) {
   const [msgVisible, setMsgVisible] = useState(false);
   const [msgText, setMsgText] = useState("");
   const [msgType, setMsgType] = useState<MsgType>("info");
-  const [nextRoute, setNextRoute] = useState<"Home" | null>(null);
+  const [nextRoute, setNextRoute] = useState<
+    | { name: "Home" }
+    | { name: "VerifyCode"; params: { email: string } }
+    | null
+  >(null);
 
   // âœ… kart büyüme anim
   const cardAnim = useRef(new Animated.Value(0)).current; // 0 kapalı, 1 açık
@@ -97,8 +102,9 @@ export default function LoginScreen({ navigation }: Props) {
   const handleMsgClose = () => {
     setMsgVisible(false);
     if (nextRoute) {
+      const target = nextRoute;
       setNextRoute(null);
-      navigation.replace(nextRoute);
+      navigation.replace(target.name as any, (target as any).params);
     }
   };
 
@@ -139,18 +145,40 @@ export default function LoginScreen({ navigation }: Props) {
       });
 
       const token = res?.data?.accessToken;
+      const refreshToken = res?.data?.refreshToken;
       if (!token) {
         showMsg("error", "Token alinmadi");
         return;
       }
-      await saveToken(token);
+      await setTokens({ accessToken: token, refreshToken: refreshToken || null });
       if (res?.data?.kullaniciId && res?.data?.email) {
         await saveProfile({ kullaniciId: res.data.kullaniciId, email: res.data.email });
       }
-      setNextRoute("Home");
+      setNextRoute({ name: "Home" });
       showMsg("success", "Giriş başarılı");
     } catch (err: any) {
-      showMsg("error", err?.response?.data?.message || "Email veya şifre hatalı");
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      const serverMsg =
+        data?.message ||
+        data?.mesaj ||
+        data?.error ||
+        (typeof data === "string" ? data : "") ||
+        "Email veya şifre hatalı";
+      const normalized = String(serverMsg).toLowerCase();
+      const needsVerify =
+        normalized.includes("doğrulan") ||
+        normalized.includes("dogrulan") ||
+        normalized.includes("verify") ||
+        normalized.includes("verification") ||
+        (status === 500 &&
+          (normalized.includes("email") || normalized.includes("kod") || normalized.includes("code")));
+      if (needsVerify) {
+        setNextRoute({ name: "VerifyCode", params: { email: email.trim() } });
+        showMsg("info", "Email doğrulanmamış. Doğrulama kodunu girin.");
+      } else {
+        showMsg("error", serverMsg);
+      }
     } finally {
       setLoading(false);
     }

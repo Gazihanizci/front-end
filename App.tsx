@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import LoginScreen from "./src/screens/LoginScreen";
 import RegisterScreen from "./src/screens/RegisterScreen";
+import VerifyCodeScreen from "./src/screens/VerifyCodeScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import MenuScreen from "./src/screens/MenuScreen";
 import FamilyScreen from "./src/screens/FamilyScreen";
@@ -20,13 +21,14 @@ import YatirimAzaltScreen from "./src/screens/YatirimAzaltScreen";
 import FamilyPermissionInboxScreen from "./src/screens/FamilyPermissionInboxScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import NotesListScreen from "./src/screens/NotesListScreen";
-import { getToken, onAuthTokenChanged } from "./src/utils/authStorage";
+import { getAccessToken, onAuthTokenChanged } from "./src/utils/authStorage";
 import { navigationRef } from "./src/navigation/navigationRef";
 import { ThemeProvider } from "./src/theme/theme";
 
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
+  VerifyCode: { email: string };
   Home: undefined;
   Menu: undefined;
   FamilyAccount: undefined;
@@ -53,7 +55,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const init = async () => {
-      const token = await getToken();
+      const token = await getAccessToken();
       if (active) {
         setIsAuthed(!!token);
         setChecking(false);
@@ -87,6 +89,7 @@ export default function App() {
             <>
               <Stack.Screen name="Login" component={LoginScreen} />
               <Stack.Screen name="Register" component={RegisterScreen} />
+              <Stack.Screen name="VerifyCode" component={VerifyCodeScreen} />
             </>
           ) : (
             <>

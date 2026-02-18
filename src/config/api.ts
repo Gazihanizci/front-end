@@ -1,5 +1,5 @@
 import axios from "axios";
-import { clearProfile, clearToken, getToken } from "../utils/authStorage";
+import { clearProfile, clearTokens, getAccessToken } from "../utils/authStorage";
 import { resetToLogin } from "../navigation/navigationRef";
 
 export const BASE_URL = "http://192.168.234.156:8080";
@@ -15,7 +15,7 @@ const api = axios.create({
 // Her request'te token'i header'a ekle
 api.interceptors.request.use(
   async (config) => {
-    const token = await getToken();
+    const token = await getAccessToken();
     if (token) {
       config.headers = config.headers ?? {};
       const trimmed = token.trim();
@@ -26,13 +26,16 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// 401 -> global logout
+// 401/403 -> global logout
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const status = error?.response?.status;
     const url: string = error?.config?.url ?? "";
     const skipLogout =
+      url.includes("/api/auth/login") ||
+      url.includes("/api/auth/verify-email") ||
+      url.includes("/api/auth/register") ||
       url.includes("/api/ailekatil") ||
       url.includes("/api/aileler/katil") ||
       url.includes("/api/ozelislemler") ||
@@ -41,8 +44,8 @@ api.interceptors.response.use(
     if (status === 401) {
       console.log("401 intercepted:", { url, skipLogout, data: error?.response?.data });
     }
-    if (status === 401 && !skipLogout) {
-      await clearToken();
+    if ((status === 401 || status === 403) && !skipLogout) {
+      await clearTokens();
       await clearProfile();
       resetToLogin();
     }

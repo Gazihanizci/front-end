@@ -8,7 +8,7 @@ import api from "../config/api";
 import MessageBox from "../components/MessageBox";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import { resetToLogin } from "../navigation/navigationRef";
-import { clearProfile, clearToken } from "../utils/authStorage";
+import { clearProfile, clearTokens } from "../utils/authStorage";
 import { ThemeColors, useTheme } from "../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Menu">;
@@ -38,7 +38,7 @@ export default function MenuScreen({ navigation }: Props) {
 
   const confirmLogout = async () => {
     setLogoutVisible(false);
-    await clearToken();
+    await clearTokens();
     await clearProfile();
     resetToLogin();
   };
@@ -343,4 +343,3 @@ const createStyles = (colors: ThemeColors) =>
     },
 
   });
-

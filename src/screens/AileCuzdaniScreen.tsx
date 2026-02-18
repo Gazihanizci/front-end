@@ -132,6 +132,26 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
   const [permissionLoading, setPermissionLoading] = useState(true);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [permissionBusy, setPermissionBusy] = useState(false);
+  const [ownerLoading, setOwnerLoading] = useState(true);
+  const [isOwner, setIsOwner] = useState(false);
+
+  const fetchOwnerAccess = useCallback(async () => {
+    setOwnerLoading(true);
+    try {
+      const [userRes, familyRes] = await Promise.all([
+        api.get("/api/userinfo"),
+        api.get("/api/familyinfo"),
+      ]);
+      const userId = Number(userRes?.data?.kullaniciId ?? null);
+      const ownerId = Number(familyRes?.data?.aileSahibiKullaniciId ?? null);
+      setIsOwner(!!userId && !!ownerId && userId === ownerId);
+    } catch (err: any) {
+      console.log("Owner kontrol hata:", err?.response?.data || err?.message);
+      setIsOwner(false);
+    } finally {
+      setOwnerLoading(false);
+    }
+  }, []);
 
   const fetchPermissionStatus = useCallback(async () => {
     setPermissionLoading(true);
@@ -249,31 +269,33 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
   }, []);
 
   useEffect(() => {
+    fetchOwnerAccess();
     fetchPermissionStatus();
-  }, [fetchPermissionStatus]);
+  }, [fetchOwnerAccess, fetchPermissionStatus]);
 
   useEffect(() => {
-    if (permissionLoading) return;
-    if (permissionStatus === "APPROVED") {
+    if (permissionLoading || ownerLoading) return;
+    if (isOwner || permissionStatus === "APPROVED") {
       fetchFamilyWalletMonthly();
       return;
     }
     setLoadingAnaliz(false);
     setLoadingCategorySummary(false);
     setLoadingMembers(false);
-  }, [fetchFamilyWalletMonthly, permissionLoading, permissionStatus]);
+  }, [fetchFamilyWalletMonthly, isOwner, ownerLoading, permissionLoading, permissionStatus]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      await fetchOwnerAccess();
       const status = await fetchPermissionStatus();
-      if (status === "APPROVED") {
+      if (isOwner || status === "APPROVED") {
         await fetchFamilyWalletMonthly();
       }
     } finally {
       setRefreshing(false);
     }
-  }, [fetchFamilyWalletMonthly, fetchPermissionStatus]);
+  }, [fetchFamilyWalletMonthly, fetchOwnerAccess, fetchPermissionStatus, isOwner]);
 
   const totalIncome = analiz?.aylikGelir ?? 0;
   const totalExpense = analiz?.aylikGider ?? 0;
@@ -319,7 +341,7 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
         : ["#38bdf8", "#22c55e", "#facc15", "#fb7185", "#a78bfa", "#f97316"],
     [mode]
   );
-  const canShowWallet = permissionStatus === "APPROVED";
+  const canShowWallet = isOwner || permissionStatus === "APPROVED";
 
   const memberCategoryGroups = useMemo(() => {
     const map = new Map<
@@ -512,11 +534,11 @@ export default function AileCuzdaniScreen({ navigation }: Props) {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.warning} />
         }
       >
-        {permissionLoading ? (
+        {permissionLoading || ownerLoading ? (
           <View style={styles.permissionCard}>
             <View style={styles.loadingInline}>
               <ActivityIndicator color={colors.warning} />
-              <Text style={styles.loadingText}>İzin kontrol ediliyor...</Text>
+              <Text style={styles.loadingText}>Yetki kontrol ediliyor...</Text>
             </View>
           </View>
         ) : !canShowWallet ? (

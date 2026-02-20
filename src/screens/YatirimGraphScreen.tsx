@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -68,8 +68,8 @@ export default function YatirimGraphScreen({ navigation }: Props) {
       const res = await api.get("/api/yatirim/graph", { params: { groupBy: group } });
       setData(res.data ?? null);
     } catch (err: any) {
-      console.log("Yatırım graph hata:", err?.response?.data || err?.message);
-      setError("Grafik verisi yüklenemedi.");
+      console.log("YatÄ±rÄ±m graph hata:", err?.response?.data || err?.message);
+      setError("Grafik verisi yÃ¼klenemedi.");
       setData(null);
     } finally {
       setLoading(false);
@@ -101,13 +101,13 @@ export default function YatirimGraphScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="Yatırım Grafiği"
-        subtitle="Portföy özet görünüm"
+        title="YatÄ±rÄ±m GrafiÄŸi"
+        subtitle="PortfÃ¶y Ã¶zet gÃ¶rÃ¼nÃ¼m"
         left={
           <HeaderAction
             label="Geri"
             icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
-            onPress={() => navigation.goBack()}
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))}
           />
         }
         right={
@@ -135,14 +135,14 @@ export default function YatirimGraphScreen({ navigation }: Props) {
             onPress={() => setGroupBy("VARLIK")}
             activeOpacity={0.85}
           >
-            <Text style={[styles.segmentText, groupBy === "VARLIK" && styles.segmentTextActive]}>Varlık</Text>
+            <Text style={[styles.segmentText, groupBy === "VARLIK" && styles.segmentTextActive]}>VarlÄ±k</Text>
           </TouchableOpacity>
         </View>
 
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator color={colors.warning} />
-            <Text style={styles.muted}>Yükleniyor...</Text>
+            <Text style={styles.muted}>YÃ¼kleniyor...</Text>
           </View>
         ) : error ? (
           <Text style={styles.error}>{error}</Text>
@@ -151,28 +151,28 @@ export default function YatirimGraphScreen({ navigation }: Props) {
             <View style={styles.kpiRow}>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Toplam Maliyet</Text>
-                <Text style={styles.kpiValue}>₺ {formatTRY(toNum(data?.toplamMaliyet))}</Text>
+                <Text style={styles.kpiValue}>â‚º {formatTRY(toNum(data?.toplamMaliyet))}</Text>
               </View>
               <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Toplam Güncel</Text>
-                <Text style={styles.kpiValue}>₺ {formatTRY(toNum(data?.toplamGuncelDeger))}</Text>
+                <Text style={styles.kpiLabel}>Toplam GÃ¼ncel</Text>
+                <Text style={styles.kpiValue}>â‚º {formatTRY(toNum(data?.toplamGuncelDeger))}</Text>
               </View>
             </View>
 
             <View style={styles.kpiCardWide}>
-              <Text style={styles.kpiLabel}>Toplam Kâr/Zarar</Text>
+              <Text style={styles.kpiLabel}>Toplam KÃ¢r/Zarar</Text>
               <View style={styles.karRow}>
                 <Text style={[styles.kpiValue, karZararPositive ? styles.karUp : styles.karDown]}>
-                  ₺ {formatTRY(totalKarZarar)}
+                  â‚º {formatTRY(totalKarZarar)}
                 </Text>
                 <View style={[styles.karBadge, karZararPositive ? styles.karBadgeUp : styles.karBadgeDown]}>
-                  <Text style={styles.karBadgeText}>{karZararPositive ? "Kâr" : "Zarar"}</Text>
+                  <Text style={styles.karBadgeText}>{karZararPositive ? "KÃ¢r" : "Zarar"}</Text>
                 </View>
               </View>
             </View>
 
             <View style={styles.chartCard}>
-              <Text style={styles.sectionTitle}>Kâr/Zarar Grafiği</Text>
+              <Text style={styles.sectionTitle}>KÃ¢r/Zarar GrafiÄŸi</Text>
               {chartData.length === 0 ? (
                 <Text style={styles.muted}>Grafik verisi yok.</Text>
               ) : (
@@ -201,7 +201,7 @@ export default function YatirimGraphScreen({ navigation }: Props) {
               <Text style={styles.sectionTitle}>Detaylar</Text>
               {points.length > 10 && (
                 <TouchableOpacity onPress={() => setShowAll((p) => !p)} activeOpacity={0.85}>
-                  <Text style={styles.linkText}>{showAll ? "İlk 10" : "Tümü"}</Text>
+                  <Text style={styles.linkText}>{showAll ? "Ä°lk 10" : "TÃ¼mÃ¼"}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -218,16 +218,16 @@ export default function YatirimGraphScreen({ navigation }: Props) {
                       {item.label}
                     </Text>
                   </View>
-                  <Text style={styles.tableValue}>₺ {formatTRY(toNum(item.toplamMaliyet))}</Text>
-                  <Text style={styles.tableValue}>₺ {formatTRY(toNum(item.guncelDeger))}</Text>
-                  <Text style={styles.tableValue}>₺ {formatTRY(toNum(item.karZarar))}</Text>
+                  <Text style={styles.tableValue}>â‚º {formatTRY(toNum(item.toplamMaliyet))}</Text>
+                  <Text style={styles.tableValue}>â‚º {formatTRY(toNum(item.guncelDeger))}</Text>
+                  <Text style={styles.tableValue}>â‚º {formatTRY(toNum(item.karZarar))}</Text>
                 </View>
               )}
               ListHeaderComponent={
                 <View style={styles.tableRowHeader}>
                   <Text style={[styles.tableHead, { flex: 1 }]}>Etiket</Text>
                   <Text style={styles.tableHead}>Maliyet</Text>
-                  <Text style={styles.tableHead}>Güncel</Text>
+                  <Text style={styles.tableHead}>GÃ¼ncel</Text>
                   <Text style={styles.tableHead}>K/Z</Text>
                 </View>
               }

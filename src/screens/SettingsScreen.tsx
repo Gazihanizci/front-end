@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+﻿import React, { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -31,23 +31,23 @@ export default function SettingsScreen({ navigation }: Props) {
     <View style={styles.container}>
       <ScreenHeader
         title="Ayarlar"
-        subtitle="Tercihlerini düzenle"
+        subtitle="Tercihlerini duzenle"
         left={
           <HeaderAction
             label="Geri"
             icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
-            onPress={() => navigation.goBack()}
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))}
           />
         }
       />
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>Görünüm</Text>
+        <Text style={styles.sectionTitle}>Gorunum</Text>
 
         <View style={styles.card}>
           <View style={{ flex: 1 }}>
             <Text style={styles.cardTitle}>Tema Modu</Text>
-            <Text style={styles.cardSub}>Koyu veya açık görünüm</Text>
+            <Text style={styles.cardSub}>Koyu veya acik gorunum</Text>
           </View>
           <View style={styles.themeButtons}>
             <TouchableOpacity
@@ -65,23 +65,23 @@ export default function SettingsScreen({ navigation }: Props) {
               style={[styles.themeButton, mode === "light" && styles.themeButtonActive]}
             >
               <Text style={[styles.themeButtonText, mode === "light" && styles.themeButtonTextActive]}>
-                Açık
+                Acik
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <Text style={styles.sectionTitle}>Hesap</Text>
-        {renderRow({ title: "Profil Bilgileri", subtitle: "Ad, e-posta ve hesap detayları" })}
-        {renderRow({ title: "Güvenlik", subtitle: "Parola ve oturum yönetimi" })}
+        {renderRow({ title: "Profil Bilgileri", subtitle: "Ad, e-posta ve hesap detaylari" })}
+        {renderRow({ title: "Guvenlik", subtitle: "Parola ve oturum yonetimi" })}
 
         <Text style={styles.sectionTitle}>Bildirimler</Text>
-        {renderRow({ title: "Bildirim Tercihleri", subtitle: "İzin istekleri ve özetler" })}
+        {renderRow({ title: "Bildirim Tercihleri", subtitle: "Izin istekleri ve ozetler" })}
 
-        <Text style={styles.sectionTitle}>Yardım</Text>
-        {renderRow({ title: "Sık Sorulan Sorular" })}
-        {renderRow({ title: "Bize Yazın" })}
-        {renderRow({ title: "Hakkında", subtitle: "Sürüm ve yasal bilgiler" })}
+        <Text style={styles.sectionTitle}>Yardim</Text>
+        {renderRow({ title: "Sik Sorulan Sorular" })}
+        {renderRow({ title: "Bize Yazin" })}
+        {renderRow({ title: "Hakkinda", subtitle: "Surum ve yasal bilgiler" })}
       </ScrollView>
     </View>
   );

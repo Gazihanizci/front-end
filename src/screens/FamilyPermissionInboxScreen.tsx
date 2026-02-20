@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -26,8 +26,8 @@ export default function FamilyPermissionInboxScreen({ navigation }: Props) {
       const arr = await getInbox();
       setItems(arr);
     } catch (err: any) {
-      console.log("İzin inbox hata:", err?.response?.data || err?.message);
-      setError("İzin talepleri yüklenemedi.");
+      console.log("Ä°zin inbox hata:", err?.response?.data || err?.message);
+      setError("Ä°zin talepleri yÃ¼klenemedi.");
       setItems([]);
     } finally {
       setLoading(false);
@@ -56,7 +56,7 @@ export default function FamilyPermissionInboxScreen({ navigation }: Props) {
         await fetchInbox();
       } catch (err: any) {
         console.log("Approve hata:", err?.response?.data || err?.message);
-        setError("Onay işlemi başarısız.");
+        setError("Onay iÅŸlemi baÅŸarÄ±sÄ±z.");
       } finally {
         setBusyId(null);
       }
@@ -73,7 +73,7 @@ export default function FamilyPermissionInboxScreen({ navigation }: Props) {
         await fetchInbox();
       } catch (err: any) {
         console.log("Reject hata:", err?.response?.data || err?.message);
-        setError("Red işlemi başarısız.");
+        setError("Red iÅŸlemi baÅŸarÄ±sÄ±z.");
       } finally {
         setBusyId(null);
       }
@@ -84,13 +84,13 @@ export default function FamilyPermissionInboxScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="İzin Talepleri"
-        subtitle="Aile cüzdanı izinleri"
+        title="Ä°zin Talepleri"
+        subtitle="Aile cÃ¼zdanÄ± izinleri"
         left={
           <HeaderAction
             label="Geri"
             icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
-            onPress={() => navigation.goBack()}
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))}
           />
         }
         right={
@@ -112,7 +112,7 @@ export default function FamilyPermissionInboxScreen({ navigation }: Props) {
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator color={colors.warning} />
-            <Text style={styles.muted}>Yükleniyor...</Text>
+            <Text style={styles.muted}>YÃ¼kleniyor...</Text>
           </View>
         ) : error ? (
           <Text style={styles.error}>{error}</Text>

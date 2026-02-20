@@ -342,7 +342,7 @@ useEffect(() => {
       <ScreenHeader
         title="Aile Hesabı"
         subtitle="Aile oluştur / aileye katıl"
-        left={<HeaderAction label="Geri" onPress={() => navigation.goBack()} />}
+        left={<HeaderAction label="Geri" onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))} />}
       />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -42,7 +42,7 @@ export default function NotesListScreen({ navigation }: Props) {
       setItems(data);
     } catch (err: any) {
       console.log("Notlar listesi hata:", err?.response?.data || err?.message);
-      setError("Notlar yüklenemedi.");
+      setError("Notlar yÃ¼klenemedi.");
       setItems([]);
     } finally {
       setLoading(false);
@@ -105,7 +105,7 @@ export default function NotesListScreen({ navigation }: Props) {
 
   const confirmDelete = (note: NotResponse) => {
     Alert.alert("Notu Sil", "Silmek istiyor musun?", [
-      { text: "Vazgeç", style: "cancel" },
+      { text: "VazgeÃ§", style: "cancel" },
       {
         text: "Sil",
         style: "destructive",
@@ -148,12 +148,12 @@ export default function NotesListScreen({ navigation }: Props) {
     <View style={styles.container}>
       <ScreenHeader
         title="Notlar"
-        subtitle="Kısa notlarını sakla"
+        subtitle="KÄ±sa notlarÄ±nÄ± sakla"
         left={
           <HeaderAction
             label="Geri"
             icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
-            onPress={() => navigation.goBack()}
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))}
           />
         }
         right={<HeaderAction label="Yeni" onPress={openCreate} />}
@@ -177,12 +177,12 @@ export default function NotesListScreen({ navigation }: Props) {
           loading ? (
             <View style={styles.center}>
               <ActivityIndicator color={colors.warning} />
-              <Text style={styles.muted}>Yükleniyor...</Text>
+              <Text style={styles.muted}>YÃ¼kleniyor...</Text>
             </View>
           ) : error ? (
             <Text style={styles.error}>{error}</Text>
           ) : (
-            <Text style={styles.muted}>Henüz not yok.</Text>
+            <Text style={styles.muted}>HenÃ¼z not yok.</Text>
           )
         }
       />
@@ -190,7 +190,7 @@ export default function NotesListScreen({ navigation }: Props) {
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>{editingNote ? "Not Düzenle" : "Yeni Not"}</Text>
+            <Text style={styles.sheetTitle}>{editingNote ? "Not DÃ¼zenle" : "Yeni Not"}</Text>
             <TextInput
               style={styles.input}
               placeholder="Notunu yaz..."
@@ -209,7 +209,7 @@ export default function NotesListScreen({ navigation }: Props) {
               {saving ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.primaryBtnText}>Kaydet</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelBtn} onPress={closeModal} disabled={saving}>
-              <Text style={styles.cancelText}>Vazgeç</Text>
+              <Text style={styles.cancelText}>VazgeÃ§</Text>
             </TouchableOpacity>
           </View>
         </View>

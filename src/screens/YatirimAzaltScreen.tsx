@@ -71,7 +71,11 @@ export default function YatirimAzaltScreen({ navigation, route }: Props) {
     setMsgVisible(false);
     if (pendingNavBack) {
       setPendingNavBack(false);
-      navigation.goBack();
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate("Home");
+      }
     }
   };
 
@@ -84,7 +88,7 @@ export default function YatirimAzaltScreen({ navigation, route }: Props) {
           <HeaderAction
             label="Geri"
             icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
-            onPress={() => navigation.goBack()}
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))}
           />
         }
       />

@@ -124,7 +124,8 @@ export default function HomeScreen({ navigation }: Props) {
   const toNum = (v: any) => {
     if (typeof v === "number") return Number.isFinite(v) ? v : 0;
     if (typeof v === "string") {
-      const n = Number(v.replace(",", "."));
+      const normalized = v.replace(/\./g, "").replace(",", ".");
+      const n = Number(normalized);
       return Number.isFinite(n) ? n : 0;
     }
     return 0;
@@ -872,51 +873,37 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
             <Text style={styles.errorText}>{graphError}</Text>
           ) : (
             <>
-              <View style={styles.graphKpiRow}>
-                <View style={styles.graphKpiCard}>
-                  <Text style={styles.graphKpiLabel}>Toplam Maliyet</Text>
-                  <Text style={styles.graphKpiValue}>₺ {formatTRY(totalMaliyet)}</Text>
-                </View>
-                <View style={styles.graphKpiCard}>
-                  <Text style={styles.graphKpiLabel}>Toplam Güncel</Text>
-                  <Text style={styles.graphKpiValue}>₺ {formatTRY(totalGuncel)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.graphKpiWide}>
-                <Text style={styles.graphKpiLabel}>Toplam Kâr/Zarar</Text>
-                <View style={styles.karRow}>
-                  <Text style={[styles.graphKpiValue, karZararPositive ? styles.karUp : styles.karDown]}>
-                    ₺ {formatTRY(totalKarZarar)}
-                  </Text>
-                  <View style={[styles.karBadge, karZararPositive ? styles.karBadgeUp : styles.karBadgeDown]}>
-                    <Text style={styles.karBadgeText}>{karZararPositive ? "Kâr" : "Zarar"}</Text>
-                  </View>
-                </View>
-              </View>
-
               <View style={styles.chartCard}>
-                <Text style={styles.chartTitle}>Kâr/Zarar Dağılımı</Text>
+                <View style={styles.chartHeaderRow}>
+                  <Text style={styles.chartTitle}>Kâr/Zarar Dağılımı</Text>
+                  <Text style={styles.chartHint}>En yüksek {graphVisiblePoints.length}</Text>
+                </View>
                 {graphChartData.length === 0 ? (
                   <Text style={styles.chartEmpty}>Grafik verisi yok.</Text>
                 ) : (
-                  <View style={styles.chipGrid}>
+                  <View style={styles.chartList}>
                     {graphVisiblePoints.map((p, i) => {
                       const v = toNum(p.karZarar);
-                      const intensity = chipIntensity(v);
+                      const pct = graphMax > 0 ? Math.min(1, Math.abs(v) / graphMax) : 0;
                       return (
-                        <View
-                          key={`${p.label}-${i}`}
-                          style={[
-                            styles.chip,
-                            v >= 0 ? styles.chipPos : styles.chipNeg,
-                            { opacity: 0.35 + intensity * 0.65 },
-                          ]}
-                        >
-                          <Text style={styles.chipLabel} numberOfLines={1}>
-                            {p.label}
-                          </Text>
-                          <Text style={styles.chipValue}>₺ {formatTRY(v)}</Text>
+                        <View key={`${p.label}-${i}`} style={styles.chartRow}>
+                          <View style={styles.chartRowTop}>
+                            <Text style={styles.chartRowLabel} numberOfLines={1}>
+                              {p.label}
+                            </Text>
+                            <Text style={[styles.chartRowValue, v >= 0 ? styles.kzUp : styles.kzDown]}>
+                              ₺ {formatTRY(v)}
+                            </Text>
+                          </View>
+                          <View style={styles.chartBarTrack}>
+                            <View
+                              style={[
+                                styles.chartBarFill,
+                                v >= 0 ? styles.chartBarFillUp : styles.chartBarFillDown,
+                                { width: `${Math.round(pct * 100)}%` },
+                              ]}
+                            />
+                          </View>
                         </View>
                       );
                     })}
@@ -980,67 +967,24 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           )}
         </View>
 
-        {/* HESAPLARIM */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={styles.cardTitle}>HESAPLARIM</Text>
-              <Text style={styles.cardSubtitle}>Banka ve nakit hesapların</Text>
-            </View>
-            <View style={styles.sectionBadge}>
-              <Text style={styles.sectionBadgeText}>{accounts.length}</Text>
+      </ScrollView>
+      {/* Chat Button */}
+      <TouchableOpacity
+        style={styles.chatFab}
+        onPress={() => navigation.navigate("Chat")}
+        activeOpacity={1}
+      >
+        <View style={styles.chatFabGlow} />
+        <View style={styles.chatIcon}>
+          <View style={styles.chatBubble}>
+            <View style={styles.chatDotRow}>
+              <View style={styles.chatDot} />
+              <View style={styles.chatDot} />
+              <View style={styles.chatDot} />
             </View>
           </View>
-
-          {loadingAccount ? (
-            <Text style={{ color: colors.textMuted, marginTop: 10 }}>Yükleniyor...</Text>
-          ) : accounts.length === 0 ? (
-            <Text style={{ color: colors.textMuted, marginTop: 10 }}>
-              Hesap yok. + ile ekleyebilirsin.
-            </Text>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.accountCarousel}
-            >
-              {accounts.map((a) => (
-                <TouchableOpacity key={a.id} style={styles.accountCardH} activeOpacity={0.8}>
-                  <View style={styles.accountTopRow}>
-                    <View style={styles.accountIcon}>
-                      <Text style={styles.accountIconText}>{a.name.slice(0, 1).toUpperCase()}</Text>
-                    </View>
-                    <View style={styles.accountBadge}>
-                      <Text style={styles.accountBadgeText}>{a.currency.trim()}</Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.accountName} numberOfLines={1}>
-                    {a.name}
-                  </Text>
-                  <Text style={styles.accountSub}>Bakiye</Text>
-
-                  <Text style={styles.accountBalance}>
-                    {formatTRY(a.balance)}
-                    {a.currency}
-                  </Text>
-
-                  <TouchableOpacity
-                    style={styles.updateBtn}
-                    onPress={() => openBalanceModal(a)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.updateBtnText}>Güncelle</Text>
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
+          <View style={styles.chatTail} />
         </View>
-      </ScrollView>
-      {/* Floating Button */}
-      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
-        <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
 
       {/* Modal */}
@@ -1407,18 +1351,55 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
     borderColor: colors.warning,
   },
   updateBtnText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
-  fab: {
+  chatFab: {
     position: "absolute",
     right: 18,
     bottom: 18,
-    width: 56,
-    height: 56,
-    borderRadius: 56,
-    backgroundColor: colors.warning,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    overflow: "hidden",
+  },
+  chatIcon: { alignItems: "center", justifyContent: "center" },
+  chatBubble: {
+    width: 22,
+    height: 18,
+    borderRadius: 8,
+    backgroundColor: colors.onAccent,
     alignItems: "center",
     justifyContent: "center",
   },
-  fabText: { color: colors.onAccent, fontSize: 28, fontWeight: "900", marginTop: -2 },
+  chatDotRow: { flexDirection: "row", gap: 4 },
+  chatDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.accent,
+  },
+  chatTail: {
+    width: 6,
+    height: 6,
+    backgroundColor: colors.onAccent,
+    transform: [{ rotate: "45deg" }],
+    marginTop: -2,
+    marginLeft: 7,
+    borderBottomRightRadius: 2,
+  },
+  chatFabGlow: {
+    position: "absolute",
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: colors.warning,
+    opacity: 0.35,
+    top: -30,
+    right: -30,
+  },
 
   modalBackdrop: {
     flex: 1,
@@ -1521,8 +1502,26 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
     borderWidth: 1,
     borderColor: colors.border,
   },
+  chartHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   chartTitle: { color: colors.text, fontSize: 12, fontWeight: "900", marginBottom: 6 },
+  chartHint: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
   chartEmpty: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
+  chartList: { gap: 10, marginTop: 6 },
+  chartRow: { gap: 6 },
+  chartRowTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  chartRowLabel: { color: colors.text, fontSize: 12, fontWeight: "800", flex: 1, marginRight: 8 },
+  chartRowValue: { fontSize: 12, fontWeight: "900" },
+  chartBarTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: "hidden",
+  },
+  chartBarFill: { height: "100%", borderRadius: 999 },
+  chartBarFillUp: { backgroundColor: colors.success },
+  chartBarFillDown: { backgroundColor: colors.danger },
   chipGrid: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     width: "48%",

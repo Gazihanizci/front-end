@@ -64,6 +64,20 @@ type YatirimGraphResponse = {
   points: YatirimGraphPointDto[];
 };
 type GraphGroupBy = "HESAP" | "VARLIK";
+type FamilyWalletResponse = {
+  aileId: number;
+  yilAy: string;
+  aileToplamGelir: number | string;
+  aileToplamGider: number | string;
+  aileNet: number | string;
+  uyelerAylik: {
+    kullaniciId: number;
+    adSoyad: string;
+    aylikGelir: number | string;
+    aylikGider: number | string;
+    net: number | string;
+  }[];
+};
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 export default function HomeScreen({ navigation }: Props) {
@@ -99,11 +113,15 @@ export default function HomeScreen({ navigation }: Props) {
   const [marketSource, setMarketSource] = useState<string | null>(null);
   const [categorySummary, setCategorySummary] = useState<CategorySummaryItem[]>([]);
   const [loadingCategorySummary, setLoadingCategorySummary] = useState(true);
-  const [graphGroupBy, setGraphGroupBy] = useState<GraphGroupBy>("HESAP");
+  const graphGroupBy: GraphGroupBy = "HESAP";
   const [graphData, setGraphData] = useState<YatirimGraphResponse | null>(null);
   const [graphLoading, setGraphLoading] = useState(true);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [graphShowAll, setGraphShowAll] = useState(false);
+  const [familyTopSpender, setFamilyTopSpender] = useState<{
+    adSoyad: string;
+    toplamTutar: number;
+  } | null>(null);
 
   // =========================
   // ✅ HELPERS
@@ -253,29 +271,14 @@ export default function HomeScreen({ navigation }: Props) {
   }, [marketTs]);
   const graphPoints = graphData?.points ?? [];
   const graphVisiblePoints = graphShowAll ? graphPoints : graphPoints.slice(0, 10);
-  const chartPoints = useMemo(() => {
-    const base = graphVisiblePoints.slice(0, 3).map((p) => ({
-      label: p.label,
-      karZarar: p.karZarar,
-    }));
-    if (base.length === 3) return base;
-
-    const fallbackLabels = [
-      ...accounts.map((a) => a.name).filter((name) => Boolean(String(name).trim())),
-      "Hesap 1",
-      "Hesap 2",
-      "Hesap 3",
-    ]
-      .slice(0, 3)
-      .map(String);
-
-    const demoValues = [1500, 0, -700];
-    const filled = fallbackLabels.map((label, idx) => ({
-      label,
-      karZarar: demoValues[idx],
-    }));
-    return filled;
-  }, [graphVisiblePoints, accounts]);
+  const chartPoints = useMemo(
+    () =>
+      graphVisiblePoints.map((p) => ({
+        label: p.label,
+        karZarar: p.karZarar,
+      })),
+    [graphVisiblePoints]
+  );
   const graphChartData = chartPoints.map((p) => toNum(p.karZarar));
   const graphMax = Math.max(0, ...graphChartData.map((v) => Math.abs(v)));
   const chipIntensity = (v: number) => {
@@ -286,6 +289,68 @@ export default function HomeScreen({ navigation }: Props) {
   const totalGuncel = toNum(graphData?.toplamGuncelDeger);
   const totalKarZarar = toNum(graphData?.toplamKarZarar);
   const karZararPositive = totalKarZarar >= 0;
+  const suggestions = useMemo(() => {
+    const list: string[] = [];
+    const safeIncome = Number(totalIncome) || 0;
+    const safeExpense = Number(totalExpense) || 0;
+
+    if (safeIncome === 0 && safeExpense === 0) {
+      list.push("Henüz bu ay için veri yok. İşlem ekleyerek özet oluşturabilirsin.");
+      return list;
+    }
+
+    if (safeIncome > 0 && safeExpense > safeIncome) {
+      list.push("Bu ay giderlerin gelirini aştı. Gider kalemlerini azaltmayı düşünebilirsin.");
+    }
+
+    const surplus = safeIncome - safeExpense;
+    if (surplus > 0) {
+      list.push(`Bu ay ${formatTRY(surplus)} TL fazla var. Tasarruf veya borç kapatma için ayırabilirsin.`);
+    }
+
+    if (giderItems.length > 0 && categoryExpenseTotal > 0) {
+      const top = giderItems[0];
+      const pct = Math.round((top.toplamTutar / categoryExpenseTotal) * 100);
+      if (pct >= 35) {
+        list.push(`Giderlerinin %${pct}'i ${top.kategoriAd} kategorisinde. Bu kalemi gözden geçir.`);
+      }
+    }
+
+    if (son6Ay.length >= 2) {
+      const prev = son6Ay[son6Ay.length - 2];
+      const cur = son6Ay[son6Ay.length - 1];
+      const diff = (Number(cur?.aylikGider) || 0) - (Number(prev?.aylikGider) || 0);
+      if (diff !== 0) {
+        const pct =
+          Number(prev?.aylikGider) > 0
+            ? Math.round((diff / Number(prev.aylikGider)) * 100)
+            : null;
+        if (diff > 0) {
+          list.push(
+            `Geçen aya göre giderin ${formatTRY(diff)} TL arttı${
+              pct != null ? ` (%${pct})` : ""
+            }.`
+          );
+        } else {
+          list.push(
+            `Geçen aya göre giderin ${formatTRY(Math.abs(diff))} TL azaldı${
+              pct != null ? ` (%${Math.abs(pct)})` : ""
+            }.`
+          );
+        }
+      }
+    }
+
+    if (familyTopSpender?.toplamTutar) {
+      list.push(
+        `Ailede bu ay en çok harcayan: ${familyTopSpender.adSoyad} (${formatTRY(
+          familyTopSpender.toplamTutar
+        )} TL).`
+      );
+    }
+
+    return list.slice(0, 3);
+  }, [totalIncome, totalExpense, giderItems, categoryExpenseTotal, son6Ay, familyTopSpender]);
 
   // =========================
   // ✅ FETCH: ACCOUNTS
@@ -401,6 +466,30 @@ export default function HomeScreen({ navigation }: Props) {
     setGraphLoading(false);
   }
 }, []);
+  const fetchFamilyTopSpender = useCallback(async () => {
+  if (!userInfo?.aileId) {
+    setFamilyTopSpender(null);
+    return;
+  }
+  try {
+    const yilAy = getCurrentYM();
+    const res = await api.get<FamilyWalletResponse>("/api/familywallet/monthly", {
+      params: { yilAy },
+    });
+    const members = Array.isArray(res.data?.uyelerAylik) ? res.data.uyelerAylik : [];
+    const top = members
+      .map((m) => ({
+        adSoyad: String(m.adSoyad ?? "Üye"),
+        toplamTutar: toNum(m.aylikGider),
+      }))
+      .filter((x) => x.toplamTutar > 0)
+      .sort((a, b) => b.toplamTutar - a.toplamTutar)[0];
+    setFamilyTopSpender(top ?? null);
+  } catch (err: any) {
+    console.log("Family wallet hata:", err?.response?.data || err?.message);
+    setFamilyTopSpender(null);
+  }
+}, [userInfo?.aileId]);
   // =========================
   // ✅ EFFECTS
   // =========================
@@ -410,7 +499,7 @@ export default function HomeScreen({ navigation }: Props) {
     fetchUserInfo();
     fetchMarket();
     fetchCategorySummaryMonthly();
-    fetchYatirimGraph(graphGroupBy);
+    fetchYatirimGraph("HESAP");
   }, [
     fetchAccounts,
     fetchSon6Ay,
@@ -418,8 +507,10 @@ export default function HomeScreen({ navigation }: Props) {
     fetchMarket,
     fetchCategorySummaryMonthly,
     fetchYatirimGraph,
-    graphGroupBy,
   ]);
+  useEffect(() => {
+    fetchFamilyTopSpender();
+  }, [fetchFamilyTopSpender]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -430,7 +521,7 @@ export default function HomeScreen({ navigation }: Props) {
         fetchUserInfo(),
         fetchMarket(),
         fetchCategorySummaryMonthly(),
-        fetchYatirimGraph(graphGroupBy),
+        fetchYatirimGraph("HESAP"),
       ]);
     } finally {
       setRefreshing(false);
@@ -442,7 +533,6 @@ export default function HomeScreen({ navigation }: Props) {
     fetchMarket,
     fetchCategorySummaryMonthly,
     fetchYatirimGraph,
-    graphGroupBy,
   ]);
 
   // son6Ay gelince donut için analiz seç
@@ -645,6 +735,29 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
               </View>
             </View>
           </View>
+        </View>
+
+        {/* AKILLI ÖNERİLER */}
+        <View style={styles.card}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.cardTitle}>Akıllı Öneriler</Text>
+            <View style={styles.sectionBadge}>
+              <Text style={styles.sectionBadgeText}>{suggestions.length}</Text>
+            </View>
+          </View>
+
+          {suggestions.length === 0 ? (
+            <Text style={{ color: colors.textMuted, marginTop: 10 }}>Şu an öneri yok.</Text>
+          ) : (
+            <View style={styles.suggestionList}>
+              {suggestions.map((s, idx) => (
+                <View key={`${idx}-${s.slice(0, 12)}`} style={styles.suggestionRow}>
+                  <View style={styles.suggestionDot} />
+                  <Text style={styles.suggestionText}>{s}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* 6 AYLIK KARŞILAŞTIRMA */}
@@ -859,32 +972,11 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           <View style={styles.sectionHeaderRow}>
             <View>
               <Text style={styles.cardTitle}>Yatırım Grafiği</Text>
-              <Text style={styles.cardSubtitle}>Portföy özeti</Text>
+              <Text style={styles.cardSubtitle}>Hesap bazlı kâr/zarar</Text>
             </View>
             <View style={styles.sectionBadge}>
               <Text style={styles.sectionBadgeText}>{graphGroupBy}</Text>
             </View>
-          </View>
-
-          <View style={styles.segmentWrap}>
-            <TouchableOpacity
-              style={[styles.segmentBtn, graphGroupBy === "HESAP" && styles.segmentBtnActive]}
-              onPress={() => setGraphGroupBy("HESAP")}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.segmentText, graphGroupBy === "HESAP" && styles.segmentTextActive]}>
-                Hesap
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segmentBtn, graphGroupBy === "VARLIK" && styles.segmentBtnActive]}
-              onPress={() => setGraphGroupBy("VARLIK")}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.segmentText, graphGroupBy === "VARLIK" && styles.segmentTextActive]}>
-                Varlık
-              </Text>
-            </TouchableOpacity>
           </View>
 
           {graphLoading ? (
@@ -908,6 +1000,10 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                     {chartPoints.map((p, i) => {
                       const v = toNum(p.karZarar);
                       const pct = graphMax > 0 ? Math.min(1, Math.abs(v) / graphMax) : 0;
+                      const leftPct = v < 0 ? pct : 0;
+                      const rightPct = v > 0 ? pct : 0;
+                      const leftWidth = leftPct > 0 ? Math.max(6, Math.round(leftPct * 100)) : 0;
+                      const rightWidth = rightPct > 0 ? Math.max(6, Math.round(rightPct * 100)) : 0;
                       return (
                         <View key={`${p.label}-${i}`} style={styles.chartRow}>
                           <View style={styles.chartRowTop}>
@@ -918,14 +1014,18 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                               ₺ {formatTRY(v)}
                             </Text>
                           </View>
-                          <View style={styles.chartBarTrack}>
-                            <View
-                              style={[
-                                styles.chartBarFill,
-                                v >= 0 ? styles.chartBarFillUp : styles.chartBarFillDown,
-                                { width: `${Math.round(pct * 100)}%` },
-                              ]}
-                            />
+                          <View style={styles.chartBarSplit}>
+                            <View style={styles.chartBarSide}>
+                              <View
+                                style={[styles.chartBarFillNeg, { width: `${leftWidth}%` }]}
+                              />
+                            </View>
+                            <View style={styles.chartBarZero} />
+                            <View style={styles.chartBarSide}>
+                              <View
+                                style={[styles.chartBarFillPos, { width: `${rightWidth}%` }]}
+                              />
+                            </View>
                           </View>
                         </View>
                       );
@@ -1468,24 +1568,6 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   cancelBtn: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
   cancelText: { color: colors.textMuted, fontWeight: "800" },
   errorText: { color: colors.danger, fontSize: 12, fontWeight: "800", marginTop: 8 },
-  segmentWrap: {
-    marginTop: 12,
-    flexDirection: "row",
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 4,
-  },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  segmentBtnActive: { backgroundColor: colors.surface },
-  segmentText: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
-  segmentTextActive: { color: colors.text },
   graphKpiRow: { flexDirection: "row", gap: 10, marginTop: 12 },
   graphKpiCard: {
     flex: 1,
@@ -1534,17 +1616,40 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   chartRowTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   chartRowLabel: { color: colors.text, fontSize: 12, fontWeight: "800", flex: 1, marginRight: 8 },
   chartRowValue: { fontSize: 12, fontWeight: "900" },
-  chartBarTrack: {
-    height: 8,
+  chartBarSplit: {
+    height: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  chartBarSide: {
+    flex: 1,
+    height: 10,
     borderRadius: 999,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: "hidden",
   },
-  chartBarFill: { height: "100%", borderRadius: 999 },
-  chartBarFillUp: { backgroundColor: colors.success },
-  chartBarFillDown: { backgroundColor: colors.danger },
+  chartBarZero: {
+    width: 2,
+    height: 12,
+    borderRadius: 2,
+    backgroundColor: colors.borderStrong,
+    marginHorizontal: 6,
+  },
+  chartBarFillPos: { height: "100%", borderRadius: 999, backgroundColor: colors.success },
+  chartBarFillNeg: { height: "100%", borderRadius: 999, backgroundColor: colors.danger },
+  suggestionList: { marginTop: 10, gap: 8 },
+  suggestionRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  suggestionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 8,
+    marginTop: 6,
+    backgroundColor: colors.warning,
+  },
+  suggestionText: { flex: 1, color: colors.text, fontSize: 12, fontWeight: "800", lineHeight: 18 },
   chipGrid: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     width: "48%",

@@ -156,7 +156,7 @@ export default function NotesListScreen({ navigation }: Props) {
             onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))}
           />
         }
-        right={<HeaderAction label="Yeni" onPress={openCreate} />}
+        right={null}
       />
 
       <FlatList

@@ -60,7 +60,7 @@ export default function MenuScreen({ navigation }: Props) {
       onPress: () => navigation.navigate("Islemler"),
     },
     {
-      title: "Kategoriler",
+      title: "Harcama Kategorileri",
       icon: <Ionicons name="pricetag-outline" size={22} color={colors.accent} />,
       onPress: () => navigation.navigate("Categories"),
     },

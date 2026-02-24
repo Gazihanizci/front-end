@@ -28,7 +28,7 @@ type UserInfo = {
 };
 
 export default function MenuScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { colors, mode, setMode } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [logoutVisible, setLogoutVisible] = useState(false);
 
@@ -154,6 +154,36 @@ export default function MenuScreen({ navigation }: Props) {
           </View>
         </View>
 
+        <View style={styles.themeBlock}>
+          <View style={styles.themeRow}>
+            <Text style={styles.themeTitle}>Tema</Text>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setMode(mode === "dark" ? "light" : "dark")}
+              style={styles.themeToggle}
+            >
+              <View style={styles.themeToggleIcons}>
+                <Ionicons name="sunny-outline" size={16} color={colors.textMuted} />
+                <Ionicons name="moon-outline" size={16} color={colors.textMuted} />
+              </View>
+              <View
+                style={[
+                  styles.themeToggleThumb,
+                  mode === "dark" ? styles.themeToggleThumbRight : styles.themeToggleThumbLeft,
+                ]}
+              >
+                <Ionicons
+                  name={mode === "dark" ? "moon" : "sunny"}
+                  size={16}
+                  color={colors.onAccent}
+                />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
         {menuItems.map((item, index) => {
           const isFamily = item.title === "Aile Hesabı";
           const aileDurum = userInfo?.aileId ? "AKTİF" : "YOK";
@@ -194,20 +224,6 @@ export default function MenuScreen({ navigation }: Props) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.menuText}>Bildirimler</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.menuItem}
-          activeOpacity={0.7}
-          onPress={() => navigation.navigate("Settings")}
-        >
-          <View style={styles.iconBox}>
-            <Ionicons name="settings-outline" size={22} color={colors.text} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.menuText}>Ayarlar</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
@@ -341,5 +357,51 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 15,
       fontWeight: "800",
     },
+    themeBlock: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 10,
+    },
+    themeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    },
+    themeTitle: { color: colors.textMuted, fontSize: 12, fontWeight: "900" },
+    themeToggle: {
+      height: 30,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.surfaceAlt,
+      justifyContent: "center",
+      paddingHorizontal: 8,
+      overflow: "hidden",
+      width: 120,
+      alignSelf: "flex-start",
+    },
+    themeToggleIcons: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingHorizontal: 4,
+    },
+    themeToggleThumb: {
+      position: "absolute",
+      top: 3,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.warning,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.warning,
+    },
+    themeToggleThumbLeft: { left: 5 },
+    themeToggleThumbRight: { right: 5 },
 
   });

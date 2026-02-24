@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { Appearance } from "react-native";
 
 export type ThemeMode = "dark" | "light";
 
@@ -76,15 +77,35 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setMode] = useState<ThemeMode>("dark");
+  const getSystemMode = (): ThemeMode =>
+    Appearance.getColorScheme() === "light" ? "light" : "dark";
+
+  const [mode, setModeState] = useState<ThemeMode>(getSystemMode());
+  const [followSystem, setFollowSystem] = useState(true);
+
+  useEffect(() => {
+    if (!followSystem) return;
+    const sub = Appearance.addChangeListener(({ colorScheme }) => {
+      setModeState(colorScheme === "light" ? "light" : "dark");
+    });
+    return () => {
+      if (typeof sub?.remove === "function") sub.remove();
+    };
+  }, [followSystem]);
 
   const colors = useMemo(() => themes[mode], [mode]);
   const value = useMemo(
     () => ({
       mode,
       colors,
-      setMode,
-      toggleMode: () => setMode(mode === "dark" ? "light" : "dark"),
+      setMode: (next: ThemeMode) => {
+        setFollowSystem(false);
+        setModeState(next);
+      },
+      toggleMode: () => {
+        setFollowSystem(false);
+        setModeState(mode === "dark" ? "light" : "dark");
+      },
     }),
     [mode, colors]
   );

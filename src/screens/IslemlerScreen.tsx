@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
+  Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -63,6 +64,8 @@ export default function IslemlerScreen({ navigation }: Props) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<"ALL" | "TODAY" | "7D" | "30D">("ALL");
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<IslemRaw | null>(null);
 
   // pagination
   const [page, setPage] = useState(0);
@@ -184,8 +187,7 @@ export default function IslemlerScreen({ navigation }: Props) {
     const tipLabel = tip === "GELIR" ? "Gelir" : tip === "GIDER" ? "Gider" : "";
 
     const subtitleParts = [item.hesapAdi, tipLabel].filter(Boolean);
-    const subtitle =
-      subtitleParts.join(" â€¢ ") || (item.aciklama?.trim() ? String(item.aciklama).trim() : "Detay");
+    const subtitle = subtitleParts.join(" â€¢ ") || "Detay";
 
     const amountNum = toNumber(item.tutar);
     const currency = item.paraBirimi || "TL";
@@ -202,33 +204,39 @@ export default function IslemlerScreen({ navigation }: Props) {
     const badgeText = title?.[0]?.toUpperCase() || "?";
 
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.85}
+        onPress={() => {
+          setSelectedItem(item);
+          setDetailVisible(true);
+        }}
+      >
         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
           <Text style={styles.badgeText}>{badgeText}</Text>
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={styles.cardBody}>
           <Text style={styles.title} numberOfLines={1}>
             {title}
           </Text>
-          <View style={styles.metaRow}>
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
-            </Text>
-            <View style={styles.dot} />
-            <Text style={styles.dateText} numberOfLines={1}>
-              {dateText}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.amountPill}>
-          <Text style={[styles.amount, { color: amountColor }]}>
-            {formatTRY(Math.abs(amountNum))} {currency}
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {subtitle}
           </Text>
         </View>
-      </View>
+
+        <View style={styles.rightCol}>
+          <View style={styles.amountPill}>
+            <Text style={[styles.amount, { color: amountColor }]}>
+              {formatTRY(Math.abs(amountNum))} {currency}
+            </Text>
+          </View>
+          <Text style={styles.dateText} numberOfLines={1}>
+            {dateText}
+          </Text>
+        </View>
+      </TouchableOpacity>
     );
-  }, []);
+  }, [colors.danger, colors.warning, colors.text, colors.accentSoft]);
 
   const listEmpty = useMemo(() => {
     if (loading) return null;
@@ -259,6 +267,20 @@ export default function IslemlerScreen({ navigation }: Props) {
       return withinRange(dt);
     });
   }, [items, dateFilter]);
+
+  const detailDate = selectedItem
+    ? formatDate(selectedItem.islemTarihi || selectedItem.tarih || selectedItem.createdAt)
+    : "-";
+  const detailAmount = selectedItem ? toNumber(selectedItem.tutar) : 0;
+  const detailCurrency = selectedItem?.paraBirimi || "TL";
+  const detailTip = String(selectedItem?.tip || "").toUpperCase();
+  const detailTipLabel =
+    detailTip === "GELIR" ? "Gelir" : detailTip === "GIDER" ? "Gider" : "-";
+  const detailTitle =
+    selectedItem?.kategoriAdiSnapshot?.trim() ||
+    selectedItem?.kategoriAd?.trim() ||
+    selectedItem?.aciklama?.trim() ||
+    "İşlem";
 
   return (
 <View style={styles.container}>
@@ -377,6 +399,61 @@ export default function IslemlerScreen({ navigation }: Props) {
       />
     </>
   )}
+
+  <Modal visible={detailVisible} transparent animationType="slide">
+    <View style={styles.modalBackdrop}>
+      <View style={styles.sheet}>
+        <Text style={styles.sheetTitle}>İşlem Detayı</Text>
+
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Kategori</Text>
+          <Text style={styles.detailValue}>{detailTitle}</Text>
+        </View>
+
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Tutar</Text>
+          <Text style={styles.detailValue}>
+            {detailCurrency === "TL" || detailCurrency === "TRY"
+              ? `₺ ${formatTRY(Math.abs(detailAmount))}`
+              : `${formatTRY(Math.abs(detailAmount))} ${detailCurrency}`}
+          </Text>
+        </View>
+
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Tür</Text>
+          <Text style={styles.detailValue}>{detailTipLabel}</Text>
+        </View>
+
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Hesap</Text>
+          <Text style={styles.detailValue}>{selectedItem?.hesapAdi || "-"}</Text>
+        </View>
+
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Tarih</Text>
+          <Text style={styles.detailValue}>{detailDate}</Text>
+        </View>
+
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Açıklama</Text>
+          <Text style={styles.detailValue}>
+            {selectedItem?.aciklama?.trim() ? String(selectedItem?.aciklama).trim() : "-"}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.closeBtn}
+          onPress={() => {
+            setDetailVisible(false);
+            setSelectedItem(null);
+          }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.closeBtnText}>Kapat</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
 </View>
 
   );
@@ -395,7 +472,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center",
   },
   screenTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
-  listContent: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 28 },
+  listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28 },
   summaryCard: {
     marginHorizontal: 16,
     marginTop: 12,
@@ -448,14 +525,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 14,
-    marginBottom: 10,
-    borderRadius: 16,
+    marginBottom: 12,
+    borderRadius: 18,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     gap: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   badge: {
     width: 38,
@@ -465,10 +547,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
   },
   badgeText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
+  cardBody: { flex: 1 },
   title: { color: colors.text, fontSize: 16, fontWeight: "800" },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
-  subtitle: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
-  dot: { width: 4, height: 4, borderRadius: 4, backgroundColor: colors.textMuted },
+  subtitle: { marginTop: 4, color: colors.textMuted, fontSize: 12, fontWeight: "700" },
+  rightCol: { alignItems: "flex-end", gap: 6 },
   dateText: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
   amountPill: {
     paddingHorizontal: 10,
@@ -490,6 +572,31 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
   },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.45)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sheetTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginBottom: 12 },
+  detailRow: { marginBottom: 10 },
+  detailLabel: { color: colors.textMuted, fontSize: 11, fontWeight: "800", marginBottom: 4 },
+  detailValue: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  closeBtn: {
+    marginTop: 6,
+    backgroundColor: colors.warning,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  closeBtnText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
 });
 
 

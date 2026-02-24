@@ -511,8 +511,8 @@ const createStyles = (colors: ThemeColors, mode: "dark" | "light") =>
       alignItems: "center",
       justifyContent: "center",
     },
-    iconBoxGider: { backgroundColor: colors.danger, opacity: 0.18 },
-    iconBoxGelir: { backgroundColor: colors.success, opacity: 0.18 },
+    iconBoxGider: { backgroundColor: colors.danger },
+    iconBoxGelir: { backgroundColor: colors.success },
     iconText: { fontSize: 18 },
     cardTitle: {
       color: colors.text,

@@ -14,29 +14,20 @@ import {
   TextInput,
   ActivityIndicator,
 } from "react-native";
+import Ionicons from "react-native-vector-icons/Ionicons";
 import MessageBox from "../components/MessageBox";
 import { ThemeColors, ThemeMode, useTheme } from "../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FamilyAccount">;
 
-type FamilyInfo = {
-  aileId: number;
-  aileAdi: string;
-  aileUyeSayisi: number;
-  aileSahibiKullaniciId: number;
-  parolaVarMi?: boolean;
-};
-
 export default function FamilyAccountScreen({ navigation }: Props) {
   const { colors, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, mode), [colors, mode]);
-  const [family, setFamily] = useState<FamilyInfo | null>(null);
   const [familyInfo, setFamilyInfo] = useState<{
     aileId: number | null;
     aileSahibiKullaniciId: number | null;
     members: { id: number; ad: string; soyad: string; email: string }[];
   } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"info" | "members">("info");
   const [members, setMembers] = useState<{ id: number; ad: string; soyad: string; email: string }[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -84,30 +75,6 @@ export default function FamilyAccountScreen({ navigation }: Props) {
   const getMemberSub = (member: { email: string }) => {
     return member.email;
   };
-
-  useEffect(() => {
-    let isActive = true;
-
-    const fetchFamily = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get("/api/aileler/sahibiyim");
-        if (isActive) setFamily(res.data ?? null);
-      } catch (err: any) {
-        if (!isActive) return;
-        if (err?.response?.status === 404) setFamily(null);
-        else console.log("Aile çekme hata:", err?.response?.data || err?.message);
-      } finally {
-        if (isActive) setLoading(false);
-      }
-    };
-
-    fetchFamily();
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
 
   const fetchFamilyInfo = useCallback(async () => {
     setMembersLoading(true);
@@ -185,16 +152,7 @@ useEffect(() => {
   // âœ… Actions
   // =========================
   const refetchFamily = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/api/aileler/sahibiyim");
-      setFamily(res.data ?? null);
-    } catch (err: any) {
-      if (err?.response?.status === 404) setFamily(null);
-      else console.log("Aile çekme hata:", err?.response?.data || err?.message);
-    } finally {
-      setLoading(false);
-    }
+    await fetchFamilyInfo();
   };
 
 
@@ -436,7 +394,7 @@ useEffect(() => {
                 {hasFamily ? "Zaten bir aile hesabın var" : "Aile adı ve parola belirleyerek oluştur"}
               </Text>
             </View>
-            <Text style={styles.actionIcon}>ï¼‹</Text>
+            <Ionicons name="add-circle-outline" size={20} color={colors.text} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -452,7 +410,7 @@ useEffect(() => {
               <Text style={styles.actionTitle}>Aileye Katıl</Text>
               <Text style={styles.actionSub}>Aile ID ve parola ile mevcut aileye dahil ol</Text>
             </View>
-            <Text style={styles.actionIcon}>â†—</Text>
+            <Ionicons name="enter-outline" size={20} color={colors.text} />
           </TouchableOpacity>
 
           {hasFamily && (
@@ -466,7 +424,7 @@ useEffect(() => {
                 <Text style={styles.actionTitle}>Aileden Çık</Text>
                 <Text style={styles.actionSub}>Mevcut aile üyeliğini sonlandır</Text>
               </View>
-              <Text style={styles.actionIcon}>â†</Text>
+              <Ionicons name="exit-outline" size={20} color={colors.text} />
             </TouchableOpacity>
           )}
         </View>

@@ -9,6 +9,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from "react-native";
+import Ionicons from "react-native-vector-icons/Ionicons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import api from "../config/api";
 import { RootStackParamList } from "../../App";
@@ -29,7 +30,7 @@ type RegisterResponse = {
   refreshToken: null;
 };
 
-export default function RegisterScreen({}: Props) {
+export default function RegisterScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -159,6 +160,14 @@ export default function RegisterScreen({}: Props) {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Login"))}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="chevron-back" size={18} color={colors.text} />
+          <Text style={styles.backText}>Giriş</Text>
+        </TouchableOpacity>
         <View style={styles.bgCircleOne} />
         <View style={styles.bgCircleTwo} />
         <View style={styles.bgRing} />
@@ -248,6 +257,22 @@ const createStyles = (colors: ThemeColors) =>
       padding: 24,
       backgroundColor: colors.background,
     },
+    backBtn: {
+      position: "absolute",
+      top: 16,
+      left: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      zIndex: 10,
+    },
+    backText: { color: colors.text, fontSize: 12, fontWeight: "800" },
     bgCircleOne: {
       position: "absolute",
       width: 360,

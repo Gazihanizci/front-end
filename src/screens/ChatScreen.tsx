@@ -39,27 +39,40 @@ type FxAssistantItem = {
   insight: string;
 };
 
-const SUGGESTIONS: string[] = [
-  "USDTRY",
-  "EURTRY",
-  "GBPTRY",
-  "XAUUSD (altın)",
-  "XAGUSD (gümüş)",
-  "BTCUSD",
-  "ETHUSD",
-  "Geçen ay harcama açıklaması",
+const MARKET_SYMBOLS: string[] = [
+  "USDTRY (ABD Doları / TL)",
+  "EURTRY (Euro / TL)",
+  "GBPTRY (Sterlin / TL)",
+  "XAUUSD (Altın / USD)",
+  "XAGUSD (Gümüş / USD)",
+  "BTCUSD (Bitcoin / USD)",
+  "ETHUSD (Ethereum / USD)",
+];
+const MONTHLY_SUMMARY_QUESTIONS: string[] = [
   "Bu ay toplam gelir",
   "Bu ay toplam gider",
   "Geçen ay toplam gelir",
   "Geçen ay toplam gider",
   "Bu ay vs geçen ay kıyas",
+  "Geçen ay harcama açıklaması",
+];
+const CATEGORY_QUESTIONS: string[] = [
   "Bu ay en çok gider",
   "Geçen ay en çok gider",
   "Bu ay kategori kırılımı",
   "Geçen ay kategori kırılımı",
-  "Yatırım özeti",
-  "Yatırım grafiği (HESAP)",
-  "Yatırım grafiği (VARLIK)",
+];
+const INVESTMENT_QUESTIONS: string[] = ["Yatırım kâr/zarar özeti"];
+const QUESTION_GROUPS: {
+  id: "market" | "summary" | "category" | "investment";
+  title: string;
+  subtitle: string;
+  items: string[];
+}[] = [
+  { id: "market", title: "Piyasa", subtitle: "Döviz / Altın / Kripto", items: MARKET_SYMBOLS },
+  { id: "summary", title: "Aylık Özet", subtitle: "Gelir ve Gider Soruları", items: MONTHLY_SUMMARY_QUESTIONS },
+  { id: "category", title: "Kategoriler", subtitle: "Gider Dağılımı", items: CATEGORY_QUESTIONS },
+  { id: "investment", title: "Yatırımlar", subtitle: "Portföy ve Grafik", items: INVESTMENT_QUESTIONS },
 ];
 const ENDPOINT = "http://192.168.234.156:8000/predict";
 
@@ -72,6 +85,9 @@ export default function ChatScreen({ navigation }: Props) {
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState<
+    "market" | "summary" | "category" | "investment" | null
+  >(null);
   const scrollRef = useRef<ScrollView | null>(null);
 
   const fetchFxData = useCallback(async () => {
@@ -355,24 +371,19 @@ export default function ChatScreen({ navigation }: Props) {
     }
 
     if (lowered.includes("yatırım")) {
-      const groupBy = lowered.includes("varlık") ? "VARLIK" : "HESAP";
-      const data = await fetchYatirimGraph(groupBy);
+      const data = await fetchYatirimGraph("HESAP");
       if (!data) {
         return replyWithText("Yatırım verisi alınamadı.");
       }
-      const totalMaliyet = formatTRY(Number(data.toplamMaliyet) || 0);
-      const totalGuncel = formatTRY(Number(data.toplamGuncelDeger) || 0);
-      const totalKarZarar = formatTRY(Number(data.toplamKarZarar) || 0);
       const points = Array.isArray(data.points) ? data.points : [];
-      const top3 = points.slice(0, 3).map((p: any, i: number) => {
-        const label = String(p.label ?? "");
+      const sumKz = points.reduce((s: number, p: any) => s + (Number(p.karZarar) || 0), 0);
+      const detailLines = points.map((p: any, i: number) => {
+        const label = String(p.label ?? "Hesap");
         const kz = formatTRY(Number(p.karZarar) || 0);
         return `${i + 1}) ${label} ${kz} TL`;
       });
-      const detail = top3.length > 0 ? `\nÖne çıkanlar:\n${top3.join("\n")}` : "";
-      return replyWithText(
-        `Yatırım özeti (${groupBy}): Maliyet ${totalMaliyet} TL, Güncel ${totalGuncel} TL, K/Z ${totalKarZarar} TL.${detail}`
-      );
+      const detail = detailLines.length ? `\nHesap bazlı K/Z:\n${detailLines.join("\n")}` : "";
+      return replyWithText(`Toplam K/Z: ${formatTRY(sumKz)} TL.${detail}`);
     }
 
     const data = await fetchFxData();
@@ -421,16 +432,20 @@ export default function ChatScreen({ navigation }: Props) {
         <View style={styles.heroGlowB} />
         <Text style={styles.heroTitle}>Hazır sorular</Text>
         <Text style={styles.heroSubtitle}>
-          Aşağıdan bir enstrüman seç. “Bunlar hakkında bilgi almak istiyorum” diye sorabilirsin.
+          Önce bir konu seç. Sonra uygun başlıklar gelir.
         </Text>
         <View style={styles.heroStatRow}>
           <View style={styles.heroStatCard}>
-            <Text style={styles.heroStatLabel}>Takip</Text>
-            <Text style={styles.heroStatValue}>7 enstrüman</Text>
+            <Text style={styles.heroStatLabel}>Konu</Text>
+            <Text style={styles.heroStatValue}>
+              {selectedGroup
+                ? QUESTION_GROUPS.find((g) => g.id === selectedGroup)?.title
+                : "Seçilmedi"}
+            </Text>
           </View>
           <View style={styles.heroStatCard}>
             <Text style={styles.heroStatLabel}>İpucu</Text>
-            <Text style={styles.heroStatValue}>Detay iste</Text>
+            <Text style={styles.heroStatValue}>Kısa sor</Text>
           </View>
         </View>
       </View>
@@ -441,48 +456,83 @@ export default function ChatScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Enstrüman Seç</Text>
-          <Text style={styles.sectionHint}>Bilgi almak için dokun</Text>
-        </View>
+        {!selectedGroup ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Soru ile başla</Text>
+              <Text style={styles.sectionHint}>Bir konu seç</Text>
+            </View>
+            <View style={styles.groupGrid}>
+              {QUESTION_GROUPS.map((group) => (
+                <TouchableOpacity
+                  key={group.id}
+                  style={styles.groupCard}
+                  activeOpacity={0.85}
+                  onPress={() => setSelectedGroup(group.id)}
+                >
+                  <Text style={styles.groupTitle}>{group.title}</Text>
+                  <Text style={styles.groupSubtitle}>{group.subtitle}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {QUESTION_GROUPS.find((g) => g.id === selectedGroup)?.title}
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  setSelectedGroup(null);
+                  setSelectedSymbol(null);
+                  setInputText("");
+                }}
+              >
+                <Text style={styles.sectionLink}>Degistir</Text>
+              </TouchableOpacity>
+            </View>
 
-        <View style={styles.chipGrid}>
-          {SUGGESTIONS.map((label) => (
-            <TouchableOpacity
-              key={label}
-              style={[
-                styles.chip,
-                selectedSymbol === normalizeSymbol(label) && styles.chipActive,
-              ]}
-              activeOpacity={0.85}
-              onPress={() => {
-                if (label.includes("Geçen ay harcama")) {
-                  setSelectedSymbol(null);
-                  setInputText("Geçen ay harcama açıklaması istiyorum.");
-                  return;
-                }
-                if (
-                  label.includes("toplam gelir") ||
-                  label.includes("toplam gider") ||
-                  label.includes("kıyas") ||
-                  label.includes("en çok gider") ||
-                  label.includes("kategori") ||
-                  label.includes("Yatırım") ||
-                  label.includes("yatırım")
-                ) {
-                  setSelectedSymbol(null);
-                  setInputText(label);
-                  return;
-                }
-                const symbol = normalizeSymbol(label);
-                setSelectedSymbol(symbol);
-                setInputText(buildPrompt(symbol));
-              }}
-            >
-              <Text style={styles.chipText}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+            <View style={styles.chipGrid}>
+              {QUESTION_GROUPS.find((g) => g.id === selectedGroup)?.items.map((label) => (
+                <TouchableOpacity
+                  key={label}
+                  style={[
+                    styles.chip,
+                    selectedSymbol === normalizeSymbol(label) && styles.chipActive,
+                  ]}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    if (label.includes("Geçen ay harcama")) {
+                      setSelectedSymbol(null);
+                      setInputText("Geçen ay harcama açıklaması istiyorum.");
+                      return;
+                    }
+                    if (
+                      label.includes("toplam gelir") ||
+                      label.includes("toplam gider") ||
+                      label.includes("kıyas") ||
+                      label.includes("en çok gider") ||
+                      label.includes("kategori") ||
+                      label.includes("Yatırım") ||
+                      label.includes("yatırım")
+                    ) {
+                      setSelectedSymbol(null);
+                      setInputText(label);
+                      return;
+                    }
+                    const symbol = normalizeSymbol(label);
+                    setSelectedSymbol(symbol);
+                    setInputText(buildPrompt(symbol));
+                  }}
+                >
+                  <Text style={styles.chipText}>{label}</Text>
+                </TouchableOpacity>
+              )) ?? null}
+            </View>
+          </>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Sohbet</Text>
@@ -558,9 +608,7 @@ export default function ChatScreen({ navigation }: Props) {
             <Text style={styles.sendBtnText}>Gönder</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.inputHint}>
-          Seçtiğin enstrüman için güncel özet ve açıklama isteyebilirsin.
-        </Text>
+
       </View>
     </KeyboardAvoidingView>
   );
@@ -634,6 +682,23 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) =>
     sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     sectionTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
     sectionHint: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
+    sectionLink: { color: colors.warning, fontSize: 11, fontWeight: "900" },
+    groupGrid: {
+      marginTop: 10,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    groupCard: {
+      width: "48%",
+      padding: 12,
+      borderRadius: 14,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+    },
+    groupTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+    groupSubtitle: { color: colors.textMuted, fontSize: 11, fontWeight: "700", marginTop: 6 },
     chipGrid: {
       marginTop: 10,
       flexDirection: "row",

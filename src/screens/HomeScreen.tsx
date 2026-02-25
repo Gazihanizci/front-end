@@ -16,7 +16,9 @@ import {
 } from "react-native";
 import * as Progress from "react-native-progress";
 import Svg, { Circle, G } from "react-native-svg";
+import notifee, { TriggerType, TimestampTrigger } from "@notifee/react-native";
 import { ThemeColors, ThemeMode, useTheme } from "../theme/theme";
+import { getAll as getSabitOdemeler, SabitOdemeResponse } from "../services/sabitOdemeApi";
 
 type Account = { id: string; name: string; balance: number; currency: string };
 
@@ -78,6 +80,22 @@ type FamilyWalletResponse = {
     net: number | string;
   }[];
 };
+type TaksitApiItem = {
+  taksitId?: number;
+  id?: number;
+  taksitBasligi?: string;
+  baslik?: string;
+  baslangicTarihi?: string;
+  baslamaTarihi?: string;
+  taksitSayisi?: number | string;
+  bittiMi?: boolean;
+};
+type ReminderItem = {
+  id: string;
+  title: string;
+  dueDate: Date;
+  type: "TAKSIT" | "SABIT";
+};
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 export default function HomeScreen({ navigation }: Props) {
@@ -118,10 +136,13 @@ export default function HomeScreen({ navigation }: Props) {
   const [graphLoading, setGraphLoading] = useState(true);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [graphShowAll, setGraphShowAll] = useState(false);
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [familyTopSpender, setFamilyTopSpender] = useState<{
     adSoyad: string;
     toplamTutar: number;
   } | null>(null);
+  const [familyMonthly, setFamilyMonthly] = useState<FamilyWalletResponse | null>(null);
+  const [familyMonthlyPrev, setFamilyMonthlyPrev] = useState<FamilyWalletResponse | null>(null);
 
   // =========================
   // ✅ HELPERS
@@ -148,6 +169,21 @@ export default function HomeScreen({ navigation }: Props) {
     }
     return 0;
   };
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const addDays = (d: Date, diff: number) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() + diff);
+    return x;
+  };
+  const addMonthsClamped = (d: Date, diff: number) => {
+    const y = d.getFullYear();
+    const m = d.getMonth() + diff;
+    const day = d.getDate();
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    return new Date(y, m, Math.min(day, lastDay));
+  };
+  const formatYMD = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const formatRateValue = (n?: number) =>
     Number.isFinite(n) ? `₺ ${formatTRY(n as number)}` : "—";
   const marketBaseUrl = useMemo(() => {
@@ -349,8 +385,90 @@ export default function HomeScreen({ navigation }: Props) {
       );
     }
 
-    return list.slice(0, 3);
-  }, [totalIncome, totalExpense, giderItems, categoryExpenseTotal, son6Ay, familyTopSpender]);
+    if (familyMonthly) {
+      const famGelir = toNum(familyMonthly.aileToplamGelir);
+      const famGider = toNum(familyMonthly.aileToplamGider);
+      const famNet = toNum(familyMonthly.aileNet);
+      if (famGider > famGelir) {
+        list.push("Ailede bu ay toplam gider, toplam geliri aştı.");
+      }
+      if (famNet < 0) {
+        list.push("Aile neti negatif. Ortak bütçeyi dengelemek için giderleri gözden geçir.");
+      }
+    }
+
+    if (familyMonthly && familyMonthlyPrev) {
+      const curGider = toNum(familyMonthly.aileToplamGider);
+      const prevGider = toNum(familyMonthlyPrev.aileToplamGider);
+      const diff = curGider - prevGider;
+      if (diff !== 0) {
+        const pct = prevGider > 0 ? Math.round((diff / prevGider) * 100) : null;
+        if (diff > 0) {
+          list.push(
+            `Aile gideri geçen aya göre ${formatTRY(diff)} TL arttı${
+              pct != null ? ` (%${pct})` : ""
+            }.`
+          );
+        } else {
+          list.push(
+            `Aile gideri geçen aya göre ${formatTRY(Math.abs(diff))} TL azaldı${
+              pct != null ? ` (%${Math.abs(pct)})` : ""
+            }.`
+          );
+        }
+      }
+    }
+
+    return list.slice(0, 5);
+  }, [
+    totalIncome,
+    totalExpense,
+    giderItems,
+    categoryExpenseTotal,
+    son6Ay,
+    familyTopSpender,
+    familyMonthly,
+    familyMonthlyPrev,
+  ]);
+  const remindersTomorrow = useMemo(() => {
+    const tomorrow = startOfDay(addDays(new Date(), 1));
+    return reminders.filter((r) => formatYMD(startOfDay(r.dueDate)) === formatYMD(tomorrow));
+  }, [reminders]);
+
+  useEffect(() => {
+    const scheduleNotifications = async () => {
+      try {
+        await notifee.requestPermission();
+        const channelId = await notifee.createChannel({
+          id: "payments",
+          name: "Ödeme Hatırlatıcıları",
+        });
+        for (const r of reminders) {
+          const triggerDate = new Date(startOfDay(addDays(r.dueDate, -1)));
+          triggerDate.setHours(9, 0, 0, 0);
+          if (triggerDate.getTime() <= Date.now()) continue;
+          const trigger: TimestampTrigger = {
+            type: TriggerType.TIMESTAMP,
+            timestamp: triggerDate.getTime(),
+          };
+          const notifId = `reminder-${r.id}`;
+          await notifee.cancelNotification(notifId);
+          await notifee.createTriggerNotification(
+            {
+              id: notifId,
+              title: "Ödeme Hatırlatıcı",
+              body: `${r.title} - ${formatYMD(r.dueDate)} tarihinde.`,
+              android: { channelId },
+            },
+            trigger
+          );
+        }
+      } catch (e) {
+        console.log("Notifee planlama hata:", e);
+      }
+    };
+    scheduleNotifications();
+  }, [reminders]);
 
   // =========================
   // ✅ FETCH: ACCOUNTS
@@ -490,6 +608,94 @@ export default function HomeScreen({ navigation }: Props) {
     setFamilyTopSpender(null);
   }
 }, [userInfo?.aileId]);
+  const fetchFamilyMonthly = useCallback(async () => {
+  if (!userInfo?.aileId) {
+    setFamilyMonthly(null);
+    setFamilyMonthlyPrev(null);
+    return;
+  }
+  try {
+    const nowKey = getCurrentYM();
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+    const [currentRes, prevRes] = await Promise.all([
+      api.get<FamilyWalletResponse>("/api/familywallet/monthly", { params: { yilAy: nowKey } }),
+      api.get<FamilyWalletResponse>("/api/familywallet/monthly", { params: { yilAy: prevKey } }),
+    ]);
+    setFamilyMonthly(currentRes.data ?? null);
+    setFamilyMonthlyPrev(prevRes.data ?? null);
+  } catch (err: any) {
+    console.log("Family monthly hata:", err?.response?.data || err?.message);
+    setFamilyMonthly(null);
+    setFamilyMonthlyPrev(null);
+  }
+}, [userInfo?.aileId]);
+  const fetchPaymentReminders = useCallback(async () => {
+  try {
+    const [taksitRes, sabitRes] = await Promise.all([
+      api.get("/api/taksitler/my"),
+      getSabitOdemeler(),
+    ]);
+
+    const taksitArr: TaksitApiItem[] = Array.isArray(taksitRes.data) ? taksitRes.data : [];
+    const sabitArr: SabitOdemeResponse[] = Array.isArray(sabitRes) ? sabitRes : [];
+
+    const today = startOfDay(new Date());
+
+    const taksitReminders: ReminderItem[] = taksitArr
+      .map((t) => {
+        const id = Number(t.taksitId ?? t.id);
+        const title = String(t.taksitBasligi ?? t.baslik ?? "Taksit");
+        const startStr = String(t.baslangicTarihi ?? t.baslamaTarihi ?? "").slice(0, 10);
+        const count = Math.max(0, Math.floor(toNum(t.taksitSayisi)));
+        const done = Boolean(t.bittiMi);
+        if (!id || !startStr || count <= 0 || done) return null;
+        const base = new Date(`${startStr}T00:00:00`);
+        if (Number.isNaN(base.getTime())) return null;
+
+        const monthDiff =
+          (today.getFullYear() - base.getFullYear()) * 12 + (today.getMonth() - base.getMonth());
+        let idx = Math.max(0, monthDiff);
+        let due = addMonthsClamped(base, idx);
+        if (startOfDay(due) < today) {
+          idx += 1;
+          due = addMonthsClamped(base, idx);
+        }
+        if (idx >= count) return null;
+
+        return {
+          id: `taksit-${id}-${formatYMD(due)}`,
+          title: `Taksit: ${title}`,
+          dueDate: due,
+          type: "TAKSIT" as const,
+        };
+      })
+      .filter(Boolean) as ReminderItem[];
+
+    const sabitReminders: ReminderItem[] = sabitArr
+      .filter((s) => s && s.aktif)
+      .map((s) => {
+        const dueStr = String(s.sonOdemeGunu ?? "").slice(0, 10);
+        if (!dueStr) return null;
+        const due = new Date(`${dueStr}T00:00:00`);
+        if (Number.isNaN(due.getTime())) return null;
+        if (startOfDay(due) < today) return null;
+        return {
+          id: `sabit-${s.odemeId}-${formatYMD(due)}`,
+          title: `Sabit Ödeme: ${s.odemeAdi}`,
+          dueDate: due,
+          type: "SABIT" as const,
+        };
+      })
+      .filter(Boolean) as ReminderItem[];
+
+    setReminders([...taksitReminders, ...sabitReminders]);
+  } catch (err: any) {
+    console.log("Hatırlatıcı listeleme hata:", err?.response?.data || err?.message);
+    setReminders([]);
+  }
+}, []);
   // =========================
   // ✅ EFFECTS
   // =========================
@@ -500,6 +706,7 @@ export default function HomeScreen({ navigation }: Props) {
     fetchMarket();
     fetchCategorySummaryMonthly();
     fetchYatirimGraph("HESAP");
+    fetchPaymentReminders();
   }, [
     fetchAccounts,
     fetchSon6Ay,
@@ -507,10 +714,12 @@ export default function HomeScreen({ navigation }: Props) {
     fetchMarket,
     fetchCategorySummaryMonthly,
     fetchYatirimGraph,
+    fetchPaymentReminders,
   ]);
   useEffect(() => {
     fetchFamilyTopSpender();
-  }, [fetchFamilyTopSpender]);
+    fetchFamilyMonthly();
+  }, [fetchFamilyTopSpender, fetchFamilyMonthly]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -522,6 +731,9 @@ export default function HomeScreen({ navigation }: Props) {
         fetchMarket(),
         fetchCategorySummaryMonthly(),
         fetchYatirimGraph("HESAP"),
+        fetchPaymentReminders(),
+        fetchFamilyTopSpender(),
+        fetchFamilyMonthly(),
       ]);
     } finally {
       setRefreshing(false);
@@ -533,6 +745,9 @@ export default function HomeScreen({ navigation }: Props) {
     fetchMarket,
     fetchCategorySummaryMonthly,
     fetchYatirimGraph,
+    fetchPaymentReminders,
+    fetchFamilyTopSpender,
+    fetchFamilyMonthly,
   ]);
 
   // son6Ay gelince donut için analiz seç
@@ -735,6 +950,31 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
               </View>
             </View>
           </View>
+        </View>
+
+        {/* YAKLAŞAN ÖDEMELER */}
+        <View style={styles.card}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.cardTitle}>Yaklaşan Ödemeler</Text>
+            <View style={styles.sectionBadge}>
+              <Text style={styles.sectionBadgeText}>{remindersTomorrow.length}</Text>
+            </View>
+          </View>
+
+          {remindersTomorrow.length === 0 ? (
+            <Text style={{ color: colors.textMuted, marginTop: 10 }}>Yarın için ödeme yok.</Text>
+          ) : (
+            <View style={styles.suggestionList}>
+              {remindersTomorrow.map((r) => (
+                <View key={r.id} style={styles.suggestionRow}>
+                  <View style={styles.suggestionDot} />
+                  <Text style={styles.suggestionText}>
+                    {r.title} • {formatYMD(r.dueDate)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* AKILLI ÖNERİLER */}

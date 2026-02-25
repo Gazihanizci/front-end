@@ -27,7 +27,7 @@ type IslemRaw = {
   kategoriAd?: string;
   kategoriAdiSnapshot?: string;
   hesapAdi?: string;
-  tip?: "GELIR" | "GIDER" | string;
+  tip?: "GELİR" | "GİDER" | string;
   islemTarihi?: string;
   tarih?: string;
   createdAt?: string;
@@ -50,7 +50,15 @@ type FamilyWalletResponse = {
   kategoriOzet: {
     kategoriId: number;
     kategoriAd: string;
-    tip: "GELIR" | "GIDER";
+    tip: "GELİR" | "GİDER";
+    toplamTutar: number | string;
+  }[];
+  uyeKategoriDagilim?: {
+    kullaniciId: number;
+    adSoyad: string;
+    kategoriId: number;
+    kategoriAd: string;
+    tip: "GELİR" | "GİDER";
     toplamTutar: number | string;
   }[];
 };
@@ -143,8 +151,8 @@ export default function RaporlarScreen({ navigation }: Props) {
         if (firstMonth) setActiveMonth(firstMonth);
       }
     } catch (err: any) {
-      console.log("Raporlar islemler hata:", err?.response?.data || err?.message);
-      setError("Islemler yuklenemedi");
+      console.log("Raporlar işlemler hata:", err?.response?.data || err?.message);
+      setError("İşlemler yüklenemedi");
       setItems([]);
     } finally {
       setLoading(false);
@@ -257,13 +265,13 @@ export default function RaporlarScreen({ navigation }: Props) {
         setPdfMessageOpen(true);
       } else {
         setPdfMessageType("error");
-        setPdfMessageText("PDF olusturulamadı. Dosya yolu alinmadi.");
+        setPdfMessageText("PDF oluşturulamadı. Dosya yolu alınmadı.");
         setPdfMessageOpen(true);
       }
     } catch (e: any) {
       console.log("PDF hata:", e?.message);
       setPdfMessageType("error");
-      setPdfMessageText("PDF olusturulamadı. Lutfen tekrar deneyin.");
+      setPdfMessageText("PDF oluşturulamadı. Lütfen tekrar deneyin.");
       setPdfMessageOpen(true);
     } finally {
       setDownloading(false);
@@ -353,11 +361,27 @@ export default function RaporlarScreen({ navigation }: Props) {
   }, []);
 
   const buildMemberPdfHtml = useCallback(
-    (monthKey: string, member: FamilyWalletResponse["uyelerAylik"][number]) => {
+    (
+      monthKey: string,
+      member: FamilyWalletResponse["uyelerAylik"][number],
+      categories: FamilyWalletResponse["uyeKategoriDagilim"]
+    ) => {
       const title = monthLabel(monthKey);
       const gelir = toNum(member.aylikGelir);
       const gider = toNum(member.aylikGider);
       const net = toNum(member.net);
+
+      const categoryRows = (categories || [])
+        .filter((c) => Number(c.kullaniciId) === Number(member.kullaniciId))
+        .map((c) => {
+          return `<tr>
+            <td>${escapeHtml(c.kategoriAd ?? "-")}</td>
+            <td>${escapeHtml(c.tip ?? "-")}</td>
+            <td style="text-align:right;">${formatTRY(Math.abs(toNum(c.toplamTutar)))}</td>
+          </tr>`;
+        })
+        .join("");
+
       return `
         <html>
           <head>
@@ -365,6 +389,7 @@ export default function RaporlarScreen({ navigation }: Props) {
             <style>
               body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
               h1 { font-size: 20px; margin: 0 0 8px; }
+              h2 { font-size: 14px; margin: 16px 0 8px; }
               .summary { margin: 12px 0 18px; font-size: 12px; }
               table { width: 100%; border-collapse: collapse; font-size: 12px; }
               th, td { border: 1px solid #e2e8f0; padding: 6px 8px; }
@@ -379,6 +404,19 @@ export default function RaporlarScreen({ navigation }: Props) {
               <div>Gider: ${formatTRY(gider)}</div>
               <div>Net: ${formatTRY(net)}</div>
             </div>
+            <h2>Kategori Özeti</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Kategori</th>
+                  <th>Tip</th>
+                  <th style="text-align:right;">Tutar</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${categoryRows || `<tr><td colspan="3">Bu ay için kategori verisi yok.</td></tr>`}
+              </tbody>
+            </table>
           </body>
         </html>
       `;
@@ -413,7 +451,7 @@ export default function RaporlarScreen({ navigation }: Props) {
           setPdfMessageOpen(true);
         } else {
           setPdfMessageType("error");
-          setPdfMessageText("Aile PDF olusturulamadı. Dosya yolu alinmadi.");
+          setPdfMessageText("Aile PDF oluşturulamadı. Dosya yolu alınmadı.");
           setPdfMessageOpen(true);
         }
       } catch (e: any) {
@@ -423,7 +461,7 @@ export default function RaporlarScreen({ navigation }: Props) {
           e?.response?.data?.detail ||
           e?.response?.data ||
           e?.message ||
-          "Aile PDF olusturulamadı. Lutfen tekrar deneyin.";
+          "Aile PDF oluşturulamadı. Lütfen tekrar deneyin.";
         console.log("Aile PDF hata:", msg);
         setPdfMessageType("error");
         setPdfMessageText(String(msg));
@@ -439,12 +477,19 @@ export default function RaporlarScreen({ navigation }: Props) {
     async (monthKey: string, member: FamilyWalletResponse["uyelerAylik"][number]) => {
       try {
         setDownloading(true);
+        let monthData = familyMonthData;
+        if (!monthData || monthData.yilAy !== monthKey) {
+          const res = await api.get<FamilyWalletResponse>("/api/familywallet/monthly", {
+            params: { yilAy: monthKey },
+          });
+          monthData = res.data;
+        }
         const safeName = String(member.adSoyad || "uye")
           .trim()
           .replace(/\s+/g, "-")
           .toLowerCase();
         const fileName = `uye-rapor-${monthKey}-${safeName}`;
-        const html = buildMemberPdfHtml(monthKey, member);
+        const html = buildMemberPdfHtml(monthKey, member, monthData?.uyeKategoriDagilim);
         const result = await generatePDF({
           html,
           fileName,
@@ -462,7 +507,7 @@ export default function RaporlarScreen({ navigation }: Props) {
           setPdfMessageOpen(true);
         } else {
           setPdfMessageType("error");
-          setPdfMessageText("Üye PDF olusturulamadı. Dosya yolu alinmadi.");
+          setPdfMessageText("Üye PDF oluşturulamadı. Dosya yolu alınmadı.");
           setPdfMessageOpen(true);
         }
       } catch (e: any) {
@@ -472,7 +517,7 @@ export default function RaporlarScreen({ navigation }: Props) {
           e?.response?.data?.detail ||
           e?.response?.data ||
           e?.message ||
-          "Üye PDF olusturulamadı. Lutfen tekrar deneyin.";
+          "Üye PDF oluşturulamadı. Lütfen tekrar deneyin.";
         console.log("Üye PDF hata:", msg);
         setPdfMessageType("error");
         setPdfMessageText(String(msg));
@@ -481,7 +526,7 @@ export default function RaporlarScreen({ navigation }: Props) {
         setDownloading(false);
       }
     },
-    [buildMemberPdfHtml]
+    [buildMemberPdfHtml, familyMonthData]
   );
 
   const openDownloadModal = useCallback(
@@ -508,7 +553,7 @@ export default function RaporlarScreen({ navigation }: Props) {
       <View style={styles.container}>
         <ScreenHeader
           title="Raporlar"
-          subtitle="Ozet ve analiz"
+          subtitle="Özet ve Analiz"
           left={
             <HeaderAction
               label="Geri"
@@ -521,7 +566,7 @@ export default function RaporlarScreen({ navigation }: Props) {
         {loading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator color={colors.warning} />
-            <Text style={styles.loadingText}>Yukleniyor...</Text>
+            <Text style={styles.loadingText}>Yükleniyor...</Text>
           </View>
         ) : (
           <>
@@ -567,9 +612,9 @@ export default function RaporlarScreen({ navigation }: Props) {
                           {monthLabelShort(item)}
                         </Text>
                         {count > 0 ? (
-                          <Text style={styles.monthCount}>{count} islem</Text>
+                          <Text style={styles.monthCount}>{count} işlem</Text>
                         ) : (
-                          <Text style={styles.monthEmptyText}>Bos</Text>
+                          <Text style={styles.monthEmptyText}>Boş</Text>
                         )}
                       </TouchableOpacity>
                     </View>
@@ -582,7 +627,7 @@ export default function RaporlarScreen({ navigation }: Props) {
       </View>
       <MessageBox
         visible={pdfMessageOpen}
-        title={pdfMessageType === "success" ? "PDF Hazir" : "Hata"}
+        title={pdfMessageType === "success" ? "PDF Hazır" : "Hata"}
         message={pdfMessageText}
         type={pdfMessageType === "success" ? "success" : "error"}
         onClose={() => setPdfMessageOpen(false)}

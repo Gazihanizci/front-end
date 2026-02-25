@@ -302,6 +302,12 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
       return { id, title, tutar, paraBirimi, baslangic, sayi, aciklama, bittiMi };
     });
   }, [items]);
+  const orderedItems = useMemo(() => {
+    const list = normalizedItems || [];
+    const active = list.filter((x) => !x.bittiMi);
+    const done = list.filter((x) => x.bittiMi);
+    return [...active, ...done];
+  }, [normalizedItems]);
 
   return (
     <View style={styles.container}>
@@ -428,10 +434,10 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
               <ActivityIndicator color={colors.warning} />
               <Text style={{ color: colors.textMuted, marginTop: 8, fontWeight: "700" }}>Yükleniyor...</Text>
             </View>
-          ) : normalizedItems.length === 0 ? (
+          ) : orderedItems.length === 0 ? (
             <Text style={styles.emptyText}>Henüz kayıt yok.</Text>
           ) : (
-            normalizedItems.map((item) => (
+            orderedItems.map((item) => (
               <View key={String(item.id)} style={styles.card}>
                 <View style={styles.listHeader}>
                   <Text style={styles.cardTitle}>{item.title}</Text>
@@ -444,7 +450,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
                   <Text style={styles.label}>Aylık Tutar</Text>
                   <Text style={styles.value}>
                     {item.paraBirimi === "TL" || item.paraBirimi === "TRY"
-                      ? `â‚º ${formatTRY(item.tutar)}`
+                      ? `₺ ${formatTRY(item.tutar)}`
                       : `${item.tutar} ${item.paraBirimi}`}
                   </Text>
                 </View>

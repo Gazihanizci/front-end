@@ -183,6 +183,7 @@ export default function ChatScreen({ navigation }: Props) {
     ]);
     setInputText("");
     const lowered = text.toLowerCase();
+    const hasAny = (patterns: string[]) => patterns.some((p) => lowered.includes(p));
 
     const getAnalizFor = async (key: string) => {
       const analizList = await fetchMonthlyAnaliz();
@@ -256,7 +257,15 @@ export default function ChatScreen({ navigation }: Props) {
       return;
     }
 
-    if (lowered.includes("bu ay toplam gelir")) {
+    if (
+      hasAny([
+        "bu ay toplam gelir",
+        "bu ayki gelir",
+        "bu ay gelir",
+        "bu ay gelirlerim",
+        "bu ay gelirlerim neler",
+      ])
+    ) {
       const key = currentMonthKey();
       const analiz = await getAnalizFor(key);
       return replyWithText(
@@ -266,7 +275,16 @@ export default function ChatScreen({ navigation }: Props) {
       );
     }
 
-    if (lowered.includes("bu ay toplam gider")) {
+    if (
+      hasAny([
+        "bu ay toplam gider",
+        "bu ayki gider",
+        "bu ay gider",
+        "bu ay giderlerim",
+        "bu ayki giderlerim neler",
+        "bu ay giderlerim neler",
+      ])
+    ) {
       const key = currentMonthKey();
       const analiz = await getAnalizFor(key);
       return replyWithText(
@@ -490,7 +508,7 @@ export default function ChatScreen({ navigation }: Props) {
                   setInputText("");
                 }}
               >
-                <Text style={styles.sectionLink}>Degistir</Text>
+                <Text style={styles.sectionLink}>Değistir</Text>
               </TouchableOpacity>
             </View>
 

@@ -13,9 +13,10 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { BarChart, Grid, XAxis } from "react-native-svg-charts";
 import { RootStackParamList } from "../../App";
-import api from "../config/api";
+import api, { BASE_URL } from "../config/api";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import { ThemeColors, useTheme } from "../theme/theme";
+import { getMyYatirimlar, YatirimCreateResponse, YatirimVarlikTuru } from "../services/yatirimService";
 
 type Props = NativeStackScreenProps<RootStackParamList, "YatirimGraph">;
 
@@ -31,6 +32,13 @@ type YatirimGraphResponse = {
   toplamGuncelDeger: string;
   toplamKarZarar: string;
   points: YatirimGraphPointDto[];
+};
+
+type MarketLatestResponse = {
+  ok: boolean;
+  ts: number;
+  source?: string;
+  data: Record<string, { value: number }>;
 };
 
 type GroupBy = "HESAP" | "VARLIK";
@@ -60,6 +68,10 @@ export default function YatirimGraphScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [marketLoading, setMarketLoading] = useState(true);
+  const [marketData, setMarketData] = useState<MarketLatestResponse["data"] | null>(null);
+  const [yatirimlar, setYatirimlar] = useState<YatirimCreateResponse[]>([]);
+  const [yatirimLoading, setYatirimLoading] = useState(true);
 
   const fetchGraph = useCallback(async (group: GroupBy) => {
     setLoading(true);
@@ -68,41 +80,147 @@ export default function YatirimGraphScreen({ navigation }: Props) {
       const res = await api.get("/api/yatirim/graph", { params: { groupBy: group } });
       setData(res.data ?? null);
     } catch (err: any) {
-      console.log("YatÄ±rÄ±m graph hata:", err?.response?.data || err?.message);
-      setError("Grafik verisi yÃ¼klenemedi.");
+      console.log("Yatırım graph hata:", err?.response?.data || err?.message);
+      setError("Grafik verisi yüklenemedi.");
       setData(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  const fetchMyYatirimlar = useCallback(async () => {
+    setYatirimLoading(true);
+    try {
+      const list = await getMyYatirimlar();
+      setYatirimlar(list);
+    } catch (err: any) {
+      console.log("yatirim/mine hata:", err?.response?.data || err?.message);
+      setYatirimlar([]);
+    } finally {
+      setYatirimLoading(false);
+    }
+  }, []);
+
+  const marketBaseUrl = useMemo(() => {
+    const raw = String(BASE_URL || "").trim();
+    const match = raw.match(/^(https?:)\/\/([^:/]+)/i);
+    if (match) {
+      const protocol = match[1];
+      const host = match[2];
+      return `${protocol}//${host}:8090`;
+    }
+    return "http://127.0.0.1:8090";
+  }, []);
+
+  const getRate = useCallback(
+    (keys: string[]) => {
+      if (!marketData) return undefined;
+      for (const k of keys) {
+        const val = marketData[k]?.value;
+        if (Number.isFinite(val)) return val;
+      }
+      return undefined;
+    },
+    [marketData]
+  );
+
+  const getMarketPriceFor = useCallback(
+    (t: YatirimVarlikTuru | undefined) => {
+      if (!t || t === "TL") return undefined;
+      if (t === "USD") return getRate(["USDTRY", "USD/TRY", "USD_TRY"]);
+      if (t === "EUR") return getRate(["EURTRY", "EUR/TRY", "EUR_TRY"]);
+      return getRate(["GRAM_ALTIN_TRY", "GRAM_ALTIN", "GRAM/TRY", "XAU_TRY", "XAUTRY"]);
+    },
+    [getRate]
+  );
+
+  const fetchMarket = useCallback(async () => {
+    setMarketLoading(true);
+    try {
+      const res = await api.get(`${marketBaseUrl}/api/market/latest`);
+      const payload: MarketLatestResponse = res.data;
+      if (payload?.ok && payload?.data) {
+        setMarketData(payload.data);
+      }
+    } catch (err: any) {
+      console.log("Market latest hata:", err?.response?.data || err?.message);
+    } finally {
+      setMarketLoading(false);
+    }
+  }, [marketBaseUrl]);
+
   useEffect(() => {
     fetchGraph(groupBy);
   }, [fetchGraph, groupBy]);
 
+  useEffect(() => {
+    fetchMarket();
+  }, [fetchMarket]);
+
+  useEffect(() => {
+    fetchMyYatirimlar();
+  }, [fetchMyYatirimlar]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetchGraph(groupBy);
+      await Promise.all([fetchGraph(groupBy), fetchMarket(), fetchMyYatirimlar()]);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchGraph, groupBy]);
+  }, [fetchGraph, fetchMarket, fetchMyYatirimlar, groupBy]);
 
-  const points = data?.points ?? [];
+  const liveGraph = useMemo<YatirimGraphResponse | null>(() => {
+    if (!marketData || yatirimlar.length === 0) return null;
+    const agg = new Map<string, { toplamMaliyet: number; guncelDeger: number }>();
+    for (const y of yatirimlar) {
+      const key = groupBy === "HESAP" ? y.hesapAdi : y.varlikTuru;
+      const marketPrice = getMarketPriceFor(y.varlikTuru);
+      const guncelDeger =
+        y.varlikTuru === "TL"
+          ? Number(y.adet)
+          : Number.isFinite(Number(marketPrice))
+          ? Number(y.adet) * Number(marketPrice)
+          : Number(y.guncelDeger);
+      const toplamMaliyet = Number(y.toplamMaliyet) || 0;
+      const prev = agg.get(key) ?? { toplamMaliyet: 0, guncelDeger: 0 };
+      agg.set(key, {
+        toplamMaliyet: prev.toplamMaliyet + toplamMaliyet,
+        guncelDeger: prev.guncelDeger + (Number.isFinite(guncelDeger) ? guncelDeger : 0),
+      });
+    }
+    const points: YatirimGraphPointDto[] = Array.from(agg.entries()).map(([label, v]) => ({
+      label,
+      toplamMaliyet: String(v.toplamMaliyet),
+      guncelDeger: String(v.guncelDeger),
+      karZarar: String(v.guncelDeger - v.toplamMaliyet),
+    }));
+    const toplamMaliyet = points.reduce((s, p) => s + toNum(p.toplamMaliyet), 0);
+    const toplamGuncelDeger = points.reduce((s, p) => s + toNum(p.guncelDeger), 0);
+    const toplamKarZarar = toplamGuncelDeger - toplamMaliyet;
+    return {
+      toplamMaliyet: String(toplamMaliyet),
+      toplamGuncelDeger: String(toplamGuncelDeger),
+      toplamKarZarar: String(toplamKarZarar),
+      points,
+    };
+  }, [marketData, yatirimlar, groupBy, getMarketPriceFor]);
+
+  const dataToShow = liveGraph ?? data;
+  const points = dataToShow?.points ?? [];
   const visiblePoints = showAll ? points : points.slice(0, 10);
 
   const chartData = visiblePoints.map((p) => toNum(p.karZarar));
   const labels = visiblePoints.map((p) => p.label);
 
-  const totalKarZarar = toNum(data?.toplamKarZarar);
+  const totalKarZarar = toNum(dataToShow?.toplamKarZarar);
   const karZararPositive = totalKarZarar >= 0;
 
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="YatÄ±rÄ±m GrafiÄŸi"
-        subtitle="PortfÃ¶y Ã¶zet gÃ¶rÃ¼nÃ¼m"
+        title="Yatırım Grafiği"
+        subtitle="Portföy özet görünüm"
         left={
           <HeaderAction
             label="Geri"
@@ -113,7 +231,11 @@ export default function YatirimGraphScreen({ navigation }: Props) {
         right={
           <HeaderAction
             icon={<Ionicons name="refresh" size={16} color={colors.text} />}
-            onPress={() => fetchGraph(groupBy)}
+            onPress={() => {
+              fetchGraph(groupBy);
+              fetchMarket();
+              fetchMyYatirimlar();
+            }}
           />
         }
       />
@@ -135,14 +257,14 @@ export default function YatirimGraphScreen({ navigation }: Props) {
             onPress={() => setGroupBy("VARLIK")}
             activeOpacity={0.85}
           >
-            <Text style={[styles.segmentText, groupBy === "VARLIK" && styles.segmentTextActive]}>VarlÄ±k</Text>
+            <Text style={[styles.segmentText, groupBy === "VARLIK" && styles.segmentTextActive]}>Varlık</Text>
           </TouchableOpacity>
         </View>
 
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator color={colors.warning} />
-            <Text style={styles.muted}>YÃ¼kleniyor...</Text>
+            <Text style={styles.muted}>Yükleniyor...</Text>
           </View>
         ) : error ? (
           <Text style={styles.error}>{error}</Text>
@@ -151,28 +273,28 @@ export default function YatirimGraphScreen({ navigation }: Props) {
             <View style={styles.kpiRow}>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Toplam Maliyet</Text>
-                <Text style={styles.kpiValue}>â‚º {formatTRY(toNum(data?.toplamMaliyet))}</Text>
+                <Text style={styles.kpiValue}>₺ {formatTRY(toNum(dataToShow?.toplamMaliyet))}</Text>
               </View>
               <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Toplam GÃ¼ncel</Text>
-                <Text style={styles.kpiValue}>â‚º {formatTRY(toNum(data?.toplamGuncelDeger))}</Text>
+                <Text style={styles.kpiLabel}>Toplam Güncel</Text>
+                <Text style={styles.kpiValue}>₺ {formatTRY(toNum(dataToShow?.toplamGuncelDeger))}</Text>
               </View>
             </View>
 
             <View style={styles.kpiCardWide}>
-              <Text style={styles.kpiLabel}>Toplam KÃ¢r/Zarar</Text>
+              <Text style={styles.kpiLabel}>Toplam Kâr/Zarar</Text>
               <View style={styles.karRow}>
                 <Text style={[styles.kpiValue, karZararPositive ? styles.karUp : styles.karDown]}>
-                  â‚º {formatTRY(totalKarZarar)}
+                  ₺ {formatTRY(totalKarZarar)}
                 </Text>
                 <View style={[styles.karBadge, karZararPositive ? styles.karBadgeUp : styles.karBadgeDown]}>
-                  <Text style={styles.karBadgeText}>{karZararPositive ? "KÃ¢r" : "Zarar"}</Text>
+                  <Text style={styles.karBadgeText}>{karZararPositive ? "Kâr" : "Zarar"}</Text>
                 </View>
               </View>
             </View>
 
             <View style={styles.chartCard}>
-              <Text style={styles.sectionTitle}>KÃ¢r/Zarar GrafiÄŸi</Text>
+              <Text style={styles.sectionTitle}>Kâr/Zarar Grafiği</Text>
               {chartData.length === 0 ? (
                 <Text style={styles.muted}>Grafik verisi yok.</Text>
               ) : (
@@ -201,7 +323,7 @@ export default function YatirimGraphScreen({ navigation }: Props) {
               <Text style={styles.sectionTitle}>Detaylar</Text>
               {points.length > 10 && (
                 <TouchableOpacity onPress={() => setShowAll((p) => !p)} activeOpacity={0.85}>
-                  <Text style={styles.linkText}>{showAll ? "Ä°lk 10" : "TÃ¼mÃ¼"}</Text>
+                  <Text style={styles.linkText}>{showAll ? "İlk 10" : "Tümü"}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -218,16 +340,16 @@ export default function YatirimGraphScreen({ navigation }: Props) {
                       {item.label}
                     </Text>
                   </View>
-                  <Text style={styles.tableValue}>â‚º {formatTRY(toNum(item.toplamMaliyet))}</Text>
-                  <Text style={styles.tableValue}>â‚º {formatTRY(toNum(item.guncelDeger))}</Text>
-                  <Text style={styles.tableValue}>â‚º {formatTRY(toNum(item.karZarar))}</Text>
+                  <Text style={styles.tableValue}>₺ {formatTRY(toNum(item.toplamMaliyet))}</Text>
+                  <Text style={styles.tableValue}>₺ {formatTRY(toNum(item.guncelDeger))}</Text>
+                  <Text style={styles.tableValue}>₺ {formatTRY(toNum(item.karZarar))}</Text>
                 </View>
               )}
               ListHeaderComponent={
                 <View style={styles.tableRowHeader}>
                   <Text style={[styles.tableHead, { flex: 1 }]}>Etiket</Text>
                   <Text style={styles.tableHead}>Maliyet</Text>
-                  <Text style={styles.tableHead}>GÃ¼ncel</Text>
+                  <Text style={styles.tableHead}>Güncel</Text>
                   <Text style={styles.tableHead}>K/Z</Text>
                 </View>
               }

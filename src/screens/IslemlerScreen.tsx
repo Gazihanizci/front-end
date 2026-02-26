@@ -419,15 +419,8 @@ export default function IslemlerScreen({ navigation }: Props) {
           </Text>
         </View>
 
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Tür</Text>
-          <Text style={styles.detailValue}>{detailTipLabel}</Text>
-        </View>
 
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Hesap</Text>
-          <Text style={styles.detailValue}>{selectedItem?.hesapAdi || "-"}</Text>
-        </View>
+
 
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Tarih</Text>

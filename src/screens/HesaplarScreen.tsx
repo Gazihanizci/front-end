@@ -412,21 +412,33 @@ export default function HesaplarScreen({ navigation }: Props) {
           <Text style={styles.muted}>Yatırım hesabı yok.</Text>
         ) : (
           yatirimlar.map((y) => {
-            const isUp = Number(y.karZarar) >= 0;
+            const marketPrice = getMarketPriceFor(y.varlikTuru);
+            const liveGuncelDeger =
+              y.varlikTuru === "TL"
+                ? Number(y.adet)
+                : Number.isFinite(Number(marketPrice))
+                ? Number(y.adet) * Number(marketPrice)
+                : Number(y.guncelDeger);
+            const liveKarZarar = Number(liveGuncelDeger) - Number(y.toplamMaliyet);
+            const displayKarZarar = Number.isFinite(liveKarZarar) ? liveKarZarar : Number(y.karZarar);
+            const displayGuncelDeger = Number.isFinite(Number(liveGuncelDeger))
+              ? Number(liveGuncelDeger)
+              : Number(y.guncelDeger);
+            const isUp = Number(displayKarZarar) >= 0;
             return (
               <View key={y.yatirimId} style={styles.card}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>{y.hesapAdi}</Text>
                   <Text style={styles.cardSub}>
-                    {y.varlikTuru} • Tutar: {formatTRY(Number(y.adet))}
+                    {y.varlikTuru} • Miktar: {formatTRY(Number(y.adet))}
                   </Text>
                   <Text style={styles.cardSub}>
-                    Güncel Değer: ₺ {formatTRY(Number(y.guncelDeger))}
+                    Güncel Değer: ₺ {formatTRY(displayGuncelDeger)}
                   </Text>
                 </View>
                 <View style={styles.cardRight}>
                   <Text style={[styles.karZarar, isUp ? styles.karZararUp : styles.karZararDown]}>
-                    {isUp ? "+" : "-"}₺ {formatTRY(Math.abs(Number(y.karZarar)))}
+                    {isUp ? "+" : "-"}₺ {formatTRY(Math.abs(Number(displayKarZarar)))}
                   </Text>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => openAction(y)}>
                     <Text style={styles.actionBtnText}>İşlemler</Text>

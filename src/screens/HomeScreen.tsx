@@ -1,7 +1,7 @@
-﻿import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import api, { BASE_URL } from "../config/api";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../App"; // 🔴 yolu projene göre kontrol et
+import { RootStackParamList } from "../../App"; // yolu projene göre kontrol et
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import {
   View,
@@ -9,6 +9,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  FlatList,
+  Dimensions,
   Modal,
   TextInput,
   ActivityIndicator,
@@ -19,6 +21,7 @@ import Svg, { Circle, G } from "react-native-svg";
 import notifee, { TriggerType, TimestampTrigger } from "@notifee/react-native";
 import { ThemeColors, ThemeMode, useTheme } from "../theme/theme";
 import { getAll as getSabitOdemeler, SabitOdemeResponse } from "../services/sabitOdemeApi";
+import { getMyYatirimlar, YatirimCreateResponse, YatirimVarlikTuru } from "../services/yatirimService";
 
 type Account = { id: string; name: string; balance: number; currency: string };
 
@@ -101,8 +104,10 @@ type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 export default function HomeScreen({ navigation }: Props) {
   const { colors, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, mode), [colors, mode]);
+  const screenWidth = Dimensions.get("window").width;
+  const monthPagerRef = useRef<FlatList<AylikAnaliz>>(null);
   // =========================
-  // ✅ STATE
+  // ? STATE
   // =========================
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingAccount, setLoadingAccount] = useState(true);
@@ -113,6 +118,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [loading6Ay, setLoading6Ay] = useState(true);
 
   const [analiz, setAnaliz] = useState<AylikAnaliz | null>(null);
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [hesapAdi, setHesapAdi] = useState("");
@@ -136,7 +142,11 @@ export default function HomeScreen({ navigation }: Props) {
   const [graphLoading, setGraphLoading] = useState(true);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [graphShowAll, setGraphShowAll] = useState(false);
+  const [yatirimlar, setYatirimlar] = useState<YatirimCreateResponse[]>([]);
+  const [yatirimLoading, setYatirimLoading] = useState(true);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [detailType, setDetailType] = useState<"reminders" | "suggestions">("reminders");
   const [familyTopSpender, setFamilyTopSpender] = useState<{
     adSoyad: string;
     toplamTutar: number;
@@ -145,7 +155,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [familyMonthlyPrev, setFamilyMonthlyPrev] = useState<FamilyWalletResponse | null>(null);
 
   // =========================
-  // ✅ HELPERS
+  // ? HELPERS
   // =========================
   const formatTRY = (n: number) =>
     (Number.isFinite(n) ? n : 0).toLocaleString("tr-TR", {
@@ -185,7 +195,7 @@ export default function HomeScreen({ navigation }: Props) {
   const formatYMD = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const formatRateValue = (n?: number) =>
-    Number.isFinite(n) ? `₺ ${formatTRY(n as number)}` : "—";
+    Number.isFinite(n) ? `₺ ${formatTRY(n as number)}` : "-";
   const marketBaseUrl = useMemo(() => {
     const raw = String(BASE_URL || "").trim();
     const match = raw.match(/^(https?:)\/\/([^:/]+)/i);
@@ -207,13 +217,23 @@ export default function HomeScreen({ navigation }: Props) {
     },
     [marketData]
   );
+  const getMarketPriceFor = useCallback(
+    (t: YatirimVarlikTuru | undefined) => {
+      if (!t || t === "TL") return undefined;
+      if (t === "USD") return getRate(["USDTRY", "USD/TRY", "USD_TRY"]);
+      if (t === "EUR") return getRate(["EURTRY", "EUR/TRY", "EUR_TRY"]);
+      return getRate(["GRAM_ALTIN_TRY", "GRAM_ALTIN", "GRAM/TRY", "XAU_TRY", "XAUTRY"]);
+    },
+    [getRate]
+  );
 
   const monthShort = (yilAy: string) => {
     const parts = String(yilAy).split("-");
     const m = Number(parts[1]); // 1..12
-    const ayKisa = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+    const ayKisa = ["Oca", "Sub", "Mar", "Nis", "May", "Haz", "Tem", "Agu", "Eyl", "Eki", "Kas", "Ara"];
     return ayKisa[(m || 1) - 1] ?? "Ay";
   };
+  const getMonthKey = (yilAy: string) => String(yilAy).slice(0, 7);
 
   const pickCurrentOrLatest = (arr: AylikAnaliz[]) => {
     if (!arr || arr.length === 0) return null;
@@ -233,19 +253,19 @@ export default function HomeScreen({ navigation }: Props) {
     const m = String(new Date().getMonth() + 1).padStart(2, "0");
     return `${y}-${m}`;
   };
+  const monthLabelFrom = (yilAy: string) => {
+    if (!yilAy) return "AYLIK";
+    const m = Number(String(yilAy).split("-")[1]);
+    const aylar = ["OCAK", "ŞUBAT", "MART", "NİSAN", "MAYIS", "HAZİRAN", "TEMMUZ", "AĞUSTOS", "EYLÜL", "EKİM", "KASIM", "ARALIK"];
+    return aylar[(m || 1) - 1] ?? "AYLIK";
+  };
 
   // =========================
-  // ✅ DERIVED (donut)
+  // ? DERIVED (donut)
   // =========================
   const totalIncome = analiz?.aylikGelir ?? 0;
   const totalExpense = analiz?.aylikGider ?? 0;
 
-  const monthLabel = useMemo(() => {
-    if (!analiz?.yilAy) return "AYLIK";
-    const m = Number(String(analiz.yilAy).split("-")[1]);
-    const aylar = ["OCAK", "ŞUBAT", "MART", "NİSAN", "MAYIS", "HAZİRAN", "TEMMUZ", "AĞUSTOS", "EYLÜL", "EKİM", "KASIM", "ARALIK"];
-    return aylar[(m || 1) - 1] ?? "AYLIK";
-  }, [analiz?.yilAy]);
 
   const total = totalIncome + totalExpense;
   const incomePct = total === 0 ? 0 : Math.round((totalIncome / total) * 100);
@@ -272,28 +292,28 @@ export default function HomeScreen({ navigation }: Props) {
     () =>
       mode === "light"
         ? [
-            "#fecdd3",
-            "#fde68a",
-            "#bfdbfe",
-            "#bbf7d0",
-            "#fed7aa",
-            "#ddd6fe",
-            "#fbcfe8",
-            "#bae6fd",
-            "#86efac",
-            "#f5d0fe",
+            "#1e3a8a",
+            "#0f766e",
+            "#b45309",
+            "#6b21a8",
+            "#be123c",
+            "#15803d",
+            "#0e7490",
+            "#a16207",
+            "#4f46e5",
+            "#374151",
           ]
         : [
-            "#fb7185",
-            "#facc15",
-            "#60a5fa",
-            "#34d399",
-            "#fb923c",
-            "#a78bfa",
-            "#f472b6",
-            "#38bdf8",
+            "#3b82f6",
+            "#14b8a6",
+            "#f59e0b",
+            "#a855f7",
+            "#f43f5e",
             "#22c55e",
-            "#e879f9",
+            "#06b6d4",
+            "#f97316",
+            "#6366f1",
+            "#94a3b8",
           ],
     [mode]
   );
@@ -305,7 +325,44 @@ export default function HomeScreen({ navigation }: Props) {
     if (!marketTs) return null;
     return new Date(marketTs * 1000).toLocaleString("tr-TR");
   }, [marketTs]);
-  const graphPoints = graphData?.points ?? [];
+  const liveGraph = useMemo<YatirimGraphResponse | null>(() => {
+    if (!marketData || yatirimlar.length === 0) return null;
+    const agg = new Map<string, { toplamMaliyet: number; guncelDeger: number }>();
+    for (const y of yatirimlar) {
+      const key = y.hesapAdi;
+      const marketPrice = getMarketPriceFor(y.varlikTuru);
+      const guncelDeger =
+        y.varlikTuru === "TL"
+          ? Number(y.adet)
+          : Number.isFinite(Number(marketPrice))
+          ? Number(y.adet) * Number(marketPrice)
+          : Number(y.guncelDeger);
+      const toplamMaliyet = Number(y.toplamMaliyet) || 0;
+      const prev = agg.get(key) ?? { toplamMaliyet: 0, guncelDeger: 0 };
+      agg.set(key, {
+        toplamMaliyet: prev.toplamMaliyet + toplamMaliyet,
+        guncelDeger: prev.guncelDeger + (Number.isFinite(guncelDeger) ? guncelDeger : 0),
+      });
+    }
+    const points: YatirimGraphPointDto[] = Array.from(agg.entries()).map(([label, v]) => ({
+      label,
+      toplamMaliyet: String(v.toplamMaliyet),
+      guncelDeger: String(v.guncelDeger),
+      karZarar: String(v.guncelDeger - v.toplamMaliyet),
+    }));
+    const toplamMaliyet = points.reduce((s, p) => s + toNum(p.toplamMaliyet), 0);
+    const toplamGuncelDeger = points.reduce((s, p) => s + toNum(p.guncelDeger), 0);
+    const toplamKarZarar = toplamGuncelDeger - toplamMaliyet;
+    return {
+      toplamMaliyet: String(toplamMaliyet),
+      toplamGuncelDeger: String(toplamGuncelDeger),
+      toplamKarZarar: String(toplamKarZarar),
+      points,
+    };
+  }, [marketData, yatirimlar, getMarketPriceFor]);
+
+  const dataToShow = liveGraph ?? graphData;
+  const graphPoints = dataToShow?.points ?? [];
   const graphVisiblePoints = graphShowAll ? graphPoints : graphPoints.slice(0, 10);
   const chartPoints = useMemo(
     () =>
@@ -321,34 +378,70 @@ export default function HomeScreen({ navigation }: Props) {
     if (graphMax <= 0) return 0;
     return Math.min(1, Math.abs(v) / graphMax);
   };
-  const totalMaliyet = toNum(graphData?.toplamMaliyet);
-  const totalGuncel = toNum(graphData?.toplamGuncelDeger);
-  const totalKarZarar = toNum(graphData?.toplamKarZarar);
+  const totalMaliyet = toNum(dataToShow?.toplamMaliyet);
+  const totalGuncel = toNum(dataToShow?.toplamGuncelDeger);
+  const totalKarZarar = toNum(dataToShow?.toplamKarZarar);
   const karZararPositive = totalKarZarar >= 0;
   const suggestions = useMemo(() => {
     const list: string[] = [];
+    const seen = new Set<string>();
+    const pushUnique = (s: string) => {
+      if (!s || seen.has(s)) return;
+      seen.add(s);
+      list.push(s);
+    };
+    const pick = (arr: string[]) => {
+      if (!arr.length) return "";
+      const idx = new Date().getMonth() % arr.length;
+      return arr[idx];
+    };
+
     const safeIncome = Number(totalIncome) || 0;
     const safeExpense = Number(totalExpense) || 0;
 
     if (safeIncome === 0 && safeExpense === 0) {
-      list.push("Henüz bu ay için veri yok. İşlem ekleyerek özet oluşturabilirsin.");
+      pushUnique(
+        pick([
+          "Bu ay için henüz işlem yok. İlk hareketi ekleyerek özet oluşturabilirsin.",
+          "Bu ayda veri bulunamadı. Bir gelir ya da gider ekleyerek başlayabilirsin.",
+          "Şu an boş görünüyor. İşlem eklediğinde özet otomatik oluşacak.",
+        ])
+      );
       return list;
     }
 
     if (safeIncome > 0 && safeExpense > safeIncome) {
-      list.push("Bu ay giderlerin gelirini aştı. Gider kalemlerini azaltmayı düşünebilirsin.");
+      pushUnique(
+        pick([
+          "Giderlerin gelirini geçti. En büyük kalemleri gözden geçirmeyi deneyebilirsin.",
+          "Bu ay bütçe açığı var. Önceliksiz harcamaları azaltmayı düşünebilirsin.",
+          "Giderler bu ay yüksek. Birkaç kalemde kısıntı iyi gelebilir.",
+        ])
+      );
     }
 
     const surplus = safeIncome - safeExpense;
     if (surplus > 0) {
-      list.push(`Bu ay ${formatTRY(surplus)} TL fazla var. Tasarruf veya borç kapatma için ayırabilirsin.`);
+      pushUnique(
+        pick([
+          `Bu ay ${formatTRY(surplus)} TL fazla var. Birikim için ayırabilirsin.`,
+          `Ay sonunda ${formatTRY(surplus)} TL artıdasın. Borç kapatma için ayırmayı düşünebilirsin.`,
+          `Bu ay ${formatTRY(surplus)} TL elinde kaldı. Hedef birikime aktarabilirsin.`,
+        ])
+      );
     }
 
     if (giderItems.length > 0 && categoryExpenseTotal > 0) {
       const top = giderItems[0];
       const pct = Math.round((top.toplamTutar / categoryExpenseTotal) * 100);
       if (pct >= 35) {
-        list.push(`Giderlerinin %${pct}'i ${top.kategoriAd} kategorisinde. Bu kalemi gözden geçir.`);
+        pushUnique(
+          pick([
+            `Giderlerinin %${pct}'i ${top.kategoriAd} kategorisinde. Bu kalemi dengeleyebilirsin.`,
+            `${top.kategoriAd} harcaması bu ay öne çıkıyor (%${pct}). Limit belirlemeyi deneyebilirsin.`,
+            `En büyük pay ${top.kategoriAd} (%${pct}). Alternatifleri değerlendirebilirsin.`,
+          ])
+        );
       }
     }
 
@@ -362,26 +455,44 @@ export default function HomeScreen({ navigation }: Props) {
             ? Math.round((diff / Number(prev.aylikGider)) * 100)
             : null;
         if (diff > 0) {
-          list.push(
-            `Geçen aya göre giderin ${formatTRY(diff)} TL arttı${
-              pct != null ? ` (%${pct})` : ""
-            }.`
+          pushUnique(
+            pick([
+              `Giderin geçen aya göre ${formatTRY(diff)} TL arttı${pct != null ? ` (%${pct})` : ""}.`,
+              `Harcamalarda artış var: +${formatTRY(diff)} TL${pct != null ? ` (%${pct})` : ""}.`,
+              `Bu ay giderlerin yükseldi: +${formatTRY(diff)} TL${pct != null ? ` (%${pct})` : ""}.`,
+            ])
           );
         } else {
-          list.push(
-            `Geçen aya göre giderin ${formatTRY(Math.abs(diff))} TL azaldı${
-              pct != null ? ` (%${Math.abs(pct)})` : ""
-            }.`
+          pushUnique(
+            pick([
+              `Giderin geçen aya göre ${formatTRY(Math.abs(diff))} TL azaldı${
+                pct != null ? ` (%${Math.abs(pct)})` : ""
+              }.`,
+              `Harcamalarda düşüş var: -${formatTRY(Math.abs(diff))} TL${
+                pct != null ? ` (%${Math.abs(pct)})` : ""
+              }.`,
+              `Bu ay giderlerin azaldı: -${formatTRY(Math.abs(diff))} TL${
+                pct != null ? ` (%${Math.abs(pct)})` : ""
+              }.`,
+            ])
           );
         }
       }
     }
 
     if (familyTopSpender?.toplamTutar) {
-      list.push(
-        `Ailede bu ay en çok harcayan: ${familyTopSpender.adSoyad} (${formatTRY(
-          familyTopSpender.toplamTutar
-        )} TL).`
+      pushUnique(
+        pick([
+          `Ailede bu ay en çok harcayan: ${familyTopSpender.adSoyad} (${formatTRY(
+            familyTopSpender.toplamTutar
+          )} TL).`,
+          `${familyTopSpender.adSoyad} bu ay aile içinde en yüksek harcamayı yaptı (${formatTRY(
+            familyTopSpender.toplamTutar
+          )} TL).`,
+          `Ailede en yüksek harcama: ${familyTopSpender.adSoyad} (${formatTRY(
+            familyTopSpender.toplamTutar
+          )} TL).`,
+        ])
       );
     }
 
@@ -390,10 +501,22 @@ export default function HomeScreen({ navigation }: Props) {
       const famGider = toNum(familyMonthly.aileToplamGider);
       const famNet = toNum(familyMonthly.aileNet);
       if (famGider > famGelir) {
-        list.push("Ailede bu ay toplam gider, toplam geliri aştı.");
+        pushUnique(
+          pick([
+            "Ailede bu ay toplam gider, toplam geliri aştı.",
+            "Aile bütçesinde bu ay giderler gelirin üzerinde.",
+            "Ailede bu ay açık var. Harcamaları gözden geçirebilirsiniz.",
+          ])
+        );
       }
       if (famNet < 0) {
-        list.push("Aile neti negatif. Ortak bütçeyi dengelemek için giderleri gözden geçir.");
+        pushUnique(
+          pick([
+            "Aile neti negatif. Ortak bütçeyi dengelemek için giderleri gözden geçir.",
+            "Aile bütçesi eksiye düştü. Öncelikleri belirlemek işe yarayabilir.",
+            "Aile neti negatif. Geçici bir kısıtlama düşünülebilir.",
+          ])
+        );
       }
     }
 
@@ -404,16 +527,26 @@ export default function HomeScreen({ navigation }: Props) {
       if (diff !== 0) {
         const pct = prevGider > 0 ? Math.round((diff / prevGider) * 100) : null;
         if (diff > 0) {
-          list.push(
-            `Aile gideri geçen aya göre ${formatTRY(diff)} TL arttı${
-              pct != null ? ` (%${pct})` : ""
-            }.`
+          pushUnique(
+            pick([
+              `Aile gideri geçen aya göre ${formatTRY(diff)} TL arttı${pct != null ? ` (%${pct})` : ""}.`,
+              `Aile giderleri yükseldi: +${formatTRY(diff)} TL${pct != null ? ` (%${pct})` : ""}.`,
+              `Ailede harcama artışı var: +${formatTRY(diff)} TL${pct != null ? ` (%${pct})` : ""}.`,
+            ])
           );
         } else {
-          list.push(
-            `Aile gideri geçen aya göre ${formatTRY(Math.abs(diff))} TL azaldı${
-              pct != null ? ` (%${Math.abs(pct)})` : ""
-            }.`
+          pushUnique(
+            pick([
+              `Aile gideri geçen aya göre ${formatTRY(Math.abs(diff))} TL azaldı${
+                pct != null ? ` (%${Math.abs(pct)})` : ""
+              }.`,
+              `Aile giderleri düştü: -${formatTRY(Math.abs(diff))} TL${
+                pct != null ? ` (%${Math.abs(pct)})` : ""
+              }.`,
+              `Aile harcamaları geriledi: -${formatTRY(Math.abs(diff))} TL${
+                pct != null ? ` (%${Math.abs(pct)})` : ""
+              }.`,
+            ])
           );
         }
       }
@@ -430,10 +563,45 @@ export default function HomeScreen({ navigation }: Props) {
     familyMonthly,
     familyMonthlyPrev,
   ]);
-  const remindersTomorrow = useMemo(() => {
-    const tomorrow = startOfDay(addDays(new Date(), 1));
-    return reminders.filter((r) => formatYMD(startOfDay(r.dueDate)) === formatYMD(tomorrow));
-  }, [reminders]);
+  const availableMonths = useMemo(() => son6Ay.map((x) => getMonthKey(x.yilAy)), [son6Ay]);
+  const remindersUpcoming = useMemo(
+    () => [...reminders].sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime()),
+    [reminders]
+  );
+  const remindersPreview = useMemo(() => remindersUpcoming.slice(0, 2), [remindersUpcoming]);
+  const suggestionsPreview = useMemo(() => suggestions.slice(0, 2), [suggestions]);
+  const openDetail = useCallback((type: "reminders" | "suggestions") => {
+    setDetailType(type);
+    setDetailModalVisible(true);
+  }, []);
+
+  useEffect(() => {
+    if (son6Ay.length === 0) return;
+    const currentKey = getCurrentYM();
+    const latest = availableMonths[availableMonths.length - 1];
+    const preferred = availableMonths.includes(currentKey) ? currentKey : latest;
+    if (!selectedMonthKey || !availableMonths.includes(selectedMonthKey)) {
+      setSelectedMonthKey(preferred);
+    }
+  }, [son6Ay, availableMonths, selectedMonthKey]);
+
+  const monthViewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+  const onMonthViewable = useRef(
+    ({ viewableItems }: { viewableItems: Array<{ item: AylikAnaliz }> }) => {
+      const first = viewableItems[0]?.item;
+      if (first) {
+        setSelectedMonthKey(getMonthKey(first.yilAy));
+      }
+    }
+  ).current;
+
+  useEffect(() => {
+    if (!selectedMonthKey) return;
+    const idx = availableMonths.indexOf(selectedMonthKey);
+    if (idx >= 0) {
+      monthPagerRef.current?.scrollToIndex({ index: idx, animated: false });
+    }
+  }, [selectedMonthKey, availableMonths]);
 
   useEffect(() => {
     const scheduleNotifications = async () => {
@@ -471,7 +639,7 @@ export default function HomeScreen({ navigation }: Props) {
   }, [reminders]);
 
   // =========================
-  // ✅ FETCH: ACCOUNTS
+  // ? FETCH: ACCOUNTS
   // =========================
   const fetchAccounts = useCallback(async () => {
     setLoadingAccount(true);
@@ -497,7 +665,7 @@ export default function HomeScreen({ navigation }: Props) {
   }, []);
 
   // =========================
-  // ✅ FETCH: LAST 6 MONTHS
+  // ? FETCH: LAST 6 MONTHS
   // =========================
   const fetchSon6Ay = useCallback(async () => {
     setLoading6Ay(true);
@@ -543,17 +711,17 @@ export default function HomeScreen({ navigation }: Props) {
     }
   } catch (err: any) {
     console.log("Market latest hata:", err?.response?.data || err?.message);
-    // Hata olursa mevcut veriyi koru; son güncelleme boş kalmasın
+    // Hata olursa mevcut veriyi koru; Son güncelleme boş kalmasın
   } finally {
     setMarketLoading(false);
   }
 }, [marketBaseUrl]);
-  const fetchCategorySummaryMonthly = useCallback(async () => {
+  const fetchCategorySummaryMonthly = useCallback(async (yilAy?: string) => {
   setLoadingCategorySummary(true);
   try {
-    const yilAy = getCurrentYM();
+    const key = yilAy || getCurrentYM();
     const res = await api.get("/api/categorysummary/monthly", {
-      params: { yilAy },
+      params: { yilAy: key },
     });
     const arr = Array.isArray(res.data) ? res.data : [];
     const normalized: CategorySummaryItem[] = arr.map((x: any) => ({
@@ -577,11 +745,23 @@ export default function HomeScreen({ navigation }: Props) {
     const res = await api.get("/api/yatirim/graph", { params: { groupBy } });
     setGraphData(res.data ?? null);
   } catch (err: any) {
-    console.log("Yatırım graph hata:", err?.response?.data || err?.message);
+    console.log("Yatirim graph hata:", err?.response?.data || err?.message);
     setGraphError("Yatırım grafiği yüklenemedi.");
     setGraphData(null);
   } finally {
     setGraphLoading(false);
+  }
+}, []);
+  const fetchMyYatirimlar = useCallback(async () => {
+  setYatirimLoading(true);
+  try {
+    const list = await getMyYatirimlar();
+    setYatirimlar(list);
+  } catch (err: any) {
+    console.log("yatirim/mine hata:", err?.response?.data || err?.message);
+    setYatirimlar([]);
+  } finally {
+    setYatirimLoading(false);
   }
 }, []);
   const fetchFamilyTopSpender = useCallback(async () => {
@@ -692,30 +872,33 @@ export default function HomeScreen({ navigation }: Props) {
 
     setReminders([...taksitReminders, ...sabitReminders]);
   } catch (err: any) {
-    console.log("Hatırlatıcı listeleme hata:", err?.response?.data || err?.message);
+    console.log("Hatirlatici listeleme hata:", err?.response?.data || err?.message);
     setReminders([]);
   }
 }, []);
   // =========================
-  // ✅ EFFECTS
+  // ? EFFECTS
   // =========================
   useEffect(() => {
     fetchAccounts();
     fetchSon6Ay();
     fetchUserInfo();
     fetchMarket();
-    fetchCategorySummaryMonthly();
     fetchYatirimGraph("HESAP");
+    fetchMyYatirimlar();
     fetchPaymentReminders();
   }, [
     fetchAccounts,
     fetchSon6Ay,
     fetchUserInfo,
     fetchMarket,
-    fetchCategorySummaryMonthly,
     fetchYatirimGraph,
+    fetchMyYatirimlar,
     fetchPaymentReminders,
   ]);
+  useEffect(() => {
+    fetchCategorySummaryMonthly(selectedMonthKey || getCurrentYM());
+  }, [fetchCategorySummaryMonthly, selectedMonthKey]);
   useEffect(() => {
     fetchFamilyTopSpender();
     fetchFamilyMonthly();
@@ -729,8 +912,9 @@ export default function HomeScreen({ navigation }: Props) {
         fetchSon6Ay(),
         fetchUserInfo(),
         fetchMarket(),
-        fetchCategorySummaryMonthly(),
+        fetchCategorySummaryMonthly(selectedMonthKey || getCurrentYM()),
         fetchYatirimGraph("HESAP"),
+        fetchMyYatirimlar(),
         fetchPaymentReminders(),
         fetchFamilyTopSpender(),
         fetchFamilyMonthly(),
@@ -745,20 +929,27 @@ export default function HomeScreen({ navigation }: Props) {
     fetchMarket,
     fetchCategorySummaryMonthly,
     fetchYatirimGraph,
+    fetchMyYatirimlar,
     fetchPaymentReminders,
     fetchFamilyTopSpender,
     fetchFamilyMonthly,
+    selectedMonthKey,
   ]);
 
-  // son6Ay gelince donut için analiz seç
-useEffect(() => {
-  if (!loading6Ay) {
-    setAnaliz(son6Ay.length ? son6Ay[son6Ay.length - 1] : null);
-  }
-}, [son6Ay, loading6Ay]);
+  // son6Ay gelince seçili aya göre analiz seç
+  useEffect(() => {
+    if (loading6Ay) return;
+    if (!son6Ay.length) {
+      setAnaliz(null);
+      return;
+    }
+    const targetKey = selectedMonthKey || getMonthKey(son6Ay[son6Ay.length - 1].yilAy);
+    const found = son6Ay.find((x) => getMonthKey(x.yilAy) === targetKey) || null;
+    setAnaliz(found);
+  }, [son6Ay, loading6Ay, selectedMonthKey]);
 
   // =========================
-  // ✅ CHART (dynamic)
+  // ? CHART (dynamic)
   // =========================
   const months = useMemo(() => son6Ay.map((x) => monthShort(x.yilAy)), [son6Ay]);
   const incomes = useMemo(() => son6Ay.map((x) => x.aylikGelir || 0), [son6Ay]);
@@ -772,7 +963,7 @@ useEffect(() => {
   };
 
   // =========================
-  // ✅ CREATE ACCOUNT
+  // ? CREATE ACCOUNT
   // =========================
   const createHesap = async () => {
     if (saving) return;
@@ -797,7 +988,7 @@ useEffect(() => {
 
       fetchAccounts();
     } catch (err: any) {
-      console.log("Hesap oluşturma hata:", err?.response?.data || err?.message);
+      console.log("Hesap Olusturma hata:", err?.response?.data || err?.message);
     } finally {
       setSaving(false);
     }
@@ -829,7 +1020,7 @@ useEffect(() => {
       setNewBalanceText("");
       fetchAccounts();
     } catch (err: any) {
-      console.log("Bakiye güncelleme hata:", err?.response?.data || err?.message);
+      console.log("Bakiye Güncelleme hata:", err?.response?.data || err?.message);
     } finally {
       setUpdatingBalance(false);
     }
@@ -842,7 +1033,7 @@ const addMonths = (d: Date, diff: number) => {
 const formatYM = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
-// ✅ Bu ay dahil son 6 ayı üretir, backend verisi yoksa 0 yazar
+// ? Bu ay dahil son 6 ayı üretir, backend verisi yoksa 0 yazar
 
 const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAnaliz[] => {
   const safeRaw = Array.isArray(raw) ? raw : [];
@@ -876,7 +1067,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
 
 
   // =========================
-  // ✅ UI
+  // ? UI
   // =========================
   return (
     <View style={styles.screen}>
@@ -887,10 +1078,14 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
             ? "YÜKLENİYOR..."
             : userInfo
             ? `${userInfo.ad} ${userInfo.soyad}`
-            : "Kullanıcı"
+            : "Kullanici"
         }
         right={<HeaderAction label="Menü" onPress={() => navigation.navigate("Menu")} />}
       />
+      <View pointerEvents="none" style={styles.heroBackdrop}>
+        <View style={styles.heroOrbPrimary} />
+        <View style={styles.heroOrbSecondary} />
+      </View>
 
       <ScrollView
         contentContainerStyle={{ paddingBottom: 28 }}
@@ -902,87 +1097,128 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           />
         }
       >
-        {/* AYLIK ÖZET */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>{monthLabel} GELİR / GİDER</Text>
-            <Text style={styles.badge}>{monthLabel}</Text>
+                {/* AYLIK ÖZET */}
+        {son6Ay.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={{ color: colors.textMuted }}>Veri yok</Text>
           </View>
+        ) : (
+          <>
+            <FlatList
+              ref={monthPagerRef}
+              data={son6Ay}
+              keyExtractor={(item) => getMonthKey(item.yilAy)}
+              horizontal
+              pagingEnabled
+              decelerationRate="fast"
+              snapToInterval={screenWidth}
+              snapToAlignment="center"
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={Math.max(0, availableMonths.indexOf(selectedMonthKey || ""))}
+              getItemLayout={(_, index) => ({
+                length: screenWidth,
+                offset: screenWidth * index,
+                index,
+              })}
+              onViewableItemsChanged={onMonthViewable}
+              viewabilityConfig={monthViewabilityConfig}
+              renderItem={({ item }) => {
+                const income = Number(item.aylikGelir) || 0;
+                const expense = Number(item.aylikGider) || 0;
+                const totalLocal = income + expense;
+                const incomePctLocal = totalLocal === 0 ? 0 : Math.round((income / totalLocal) * 100);
+                const expensePctLocal = totalLocal === 0 ? 0 : Math.round((expense / totalLocal) * 100);
+                const label = monthLabelFrom(item.yilAy);
+                return (
+                  <View style={[styles.monthPagerItem, { width: screenWidth }]}>
+                    <View style={[styles.monthPagerCard, { width: screenWidth - 32 }]}>
+                      <View style={styles.cardHeaderRow}>
+                        <Text style={styles.cardTitle}>{label} GELİR / GİDER</Text>
+                        <Text style={styles.badge}>{label}</Text>
+                      </View>
 
-          <View style={styles.row}>
-            <View style={{ width: 160, height: 160 }}>
-              <Progress.Circle
-                size={160}
-                thickness={16}
-                progress={incomePct / 100}
-                color={colors.warning}
-                unfilledColor={colors.danger}
-                borderWidth={0}
-                showsText={false}
-              />
+                      <View style={styles.row}>
+                        <View style={{ width: 160, height: 160 }}>
+                          <Progress.Circle
+                            size={160}
+                            thickness={16}
+                            progress={incomePctLocal / 100}
+                            color={colors.warning}
+                            unfilledColor={colors.danger}
+                            borderWidth={0}
+                            showsText={false}
+                          />
 
-              <View style={styles.donutCenter}>
-                <Text style={styles.donutCenterTitle}>{monthLabel}</Text>
-                <Text style={styles.donutCenterSub}>
-                  {loading6Ay ? "YÜKLENİYOR..." : analiz ? "GELİR / GİDER" : "VERİ YOK"}
-                </Text>
-              </View>
-            </View>
+                          <View style={styles.donutCenter}>
+                            <Text style={styles.donutCenterTitle}>{label}</Text>
+                            <Text style={styles.donutCenterSub}>
+                              {loading6Ay ? "YÜKLENİYOR..." : totalLocal > 0 ? "GELİR / GİDER" : "VERİ YOK"}
+                            </Text>
+                          </View>
+                        </View>
 
-            <View style={{ flex: 1, paddingLeft: 14 }}>
-              <Text style={styles.kpiLabel}>Aylık Gelir</Text>
-              <Text style={styles.kpiValue}>+ {formatTRY(totalIncome)} TL</Text>
+                        <View style={{ flex: 1, paddingLeft: 14 }}>
+                          <Text style={styles.kpiLabel}>Aylik Gelir</Text>
+                          <Text style={styles.kpiValue}>+ {formatTRY(income)} TL</Text>
 
-              <View style={{ height: 10 }} />
+                          <View style={{ height: 10 }} />
 
-              <Text style={styles.kpiLabel}>Aylık Gider</Text>
-              <Text style={styles.kpiValueDanger}>- {formatTRY(totalExpense)} TL</Text>
+                          <Text style={styles.kpiLabel}>Aylik Gider</Text>
+                          <Text style={styles.kpiValueDanger}>- {formatTRY(expense)} TL</Text>
 
-              <View style={{ height: 14 }} />
+                          <View style={{ height: 14 }} />
 
-              <View style={styles.legendRow}>
-                <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
-                <Text style={styles.legendText}>Gelir {incomePct}%</Text>
-              </View>
-              <View style={styles.legendRow}>
-                <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
-                <Text style={styles.legendText}>Gider {expensePct}%</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* YAKLAŞAN ÖDEMELER */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.cardTitle}>Yaklaşan Ödemeler</Text>
-            <View style={styles.sectionBadge}>
-              <Text style={styles.sectionBadgeText}>{remindersTomorrow.length}</Text>
-            </View>
-          </View>
-
-          {remindersTomorrow.length === 0 ? (
-            <Text style={{ color: colors.textMuted, marginTop: 10 }}>Yarın için ödeme yok.</Text>
-          ) : (
-            <View style={styles.suggestionList}>
-              {remindersTomorrow.map((r) => (
-                <View key={r.id} style={styles.suggestionRow}>
-                  <View style={styles.suggestionDot} />
-                  <Text style={styles.suggestionText}>
-                    {r.title} • {formatYMD(r.dueDate)}
-                  </Text>
+                          <View style={styles.legendRow}>
+                            <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
+                            <Text style={styles.legendText}>Gelir {incomePctLocal}%</Text>
+                          </View>
+                          <View style={styles.legendRow}>
+                            <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
+                            <Text style={styles.legendText}>Gider {expensePctLocal}%</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                );
+              }}
+            />
+            {son6Ay.length > 1 ? (
+              <View style={styles.monthPagerIndicator}>
+                <View style={styles.monthPagerDots}>
+                  {son6Ay.map((m, idx) => {
+                    const active = getMonthKey(m.yilAy) === selectedMonthKey;
+                    return (
+                      <View
+                        key={`${m.yilAy}-${idx}`}
+                        style={[styles.monthPagerDot, active && styles.monthPagerDotActive]}
+                      />
+                    );
+                  })}
                 </View>
-              ))}
-            </View>
-          )}
-        </View>
+                <Text style={styles.monthPagerHint}>Kaydir</Text>
+              </View>
+            ) : null}
+          </>
+        )}
 
         {/* AKILLI ÖNERİLER */}
-        <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.9}
+          onPress={() => openDetail("suggestions")}
+        >
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.cardTitle}>Akıllı Öneriler</Text>
-            <View style={styles.sectionBadge}>
-              <Text style={styles.sectionBadgeText}>{suggestions.length}</Text>
+            <View style={styles.sectionHeaderActions}>
+              {suggestions.length > 2 ? (
+                <TouchableOpacity onPress={() => openDetail("suggestions")} activeOpacity={0.8}>
+                  <Text style={styles.sectionLink}>Detaylar</Text>
+                </TouchableOpacity>
+              ) : null}
+              <View style={styles.sectionBadge}>
+                <Text style={styles.sectionBadgeText}>{suggestions.length}</Text>
+              </View>
             </View>
           </View>
 
@@ -990,7 +1226,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
             <Text style={{ color: colors.textMuted, marginTop: 10 }}>Şu an öneri yok.</Text>
           ) : (
             <View style={styles.suggestionList}>
-              {suggestions.map((s, idx) => (
+              {suggestionsPreview.map((s, idx) => (
                 <View key={`${idx}-${s.slice(0, 12)}`} style={styles.suggestionRow}>
                   <View style={styles.suggestionDot} />
                   <Text style={styles.suggestionText}>{s}</Text>
@@ -998,9 +1234,9 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
               ))}
             </View>
           )}
-        </View>
+        </TouchableOpacity>
 
-        {/* 6 AYLIK KARŞILAŞTIRMA */}
+        {/* 6 AYLIK KARSILASTIRMA */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>SON 6 AY Karşılaştırma</Text>
 
@@ -1038,6 +1274,43 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
               <Text style={styles.legendText2}>Gider</Text>
             </View>
           </View>
+
+          <View style={styles.sectionDivider} />
+
+          <TouchableOpacity
+            style={styles.inlineSection}
+            activeOpacity={0.9}
+            onPress={() => openDetail("reminders")}
+          >
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.cardTitle}>Yaklaşan Ödemeler</Text>
+              <View style={styles.sectionHeaderActions}>
+                {remindersUpcoming.length > 2 ? (
+                  <TouchableOpacity onPress={() => openDetail("reminders")} activeOpacity={0.8}>
+                    <Text style={styles.sectionLink}>Detaylar</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <View style={styles.sectionBadge}>
+                  <Text style={styles.sectionBadgeText}>{remindersUpcoming.length}</Text>
+                </View>
+              </View>
+            </View>
+
+            {remindersUpcoming.length === 0 ? (
+              <Text style={{ color: colors.textMuted, marginTop: 10 }}>Yaklaşan ödeme yok.</Text>
+            ) : (
+              <View style={styles.suggestionList}>
+                {remindersPreview.map((r) => (
+                  <View key={r.id} style={styles.suggestionRow}>
+                    <View style={styles.suggestionDot} />
+                    <Text style={styles.suggestionText}>
+                      {r.title} • {formatYMD(r.dueDate)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* HARCAMALAR NEREYE GİDİYOR? */}
@@ -1111,7 +1384,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                     <View key={item.kategoriId} style={styles.categoryRow}>
                       <View style={[styles.categoryBadge, { backgroundColor: color }]}>
                         <Text style={styles.categoryBadgeText}>
-                          {item.kategoriAd?.[0]?.toUpperCase() ?? "?"}
+                          {item.kategoriAd?.[0]?.toUpperCase() ?? ""}
                         </Text>
                       </View>
                       <View style={{ flex: 1 }}>
@@ -1135,7 +1408,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
         <View style={styles.card}>
           <View style={styles.sectionHeaderRow}>
             <View>
-              <Text style={styles.cardTitle}>Güncel Kurlar</Text>
+              <Text style={styles.cardTitle}>GÜNCEL KURLAR</Text>
               <Text style={styles.cardSubtitle}>Döviz ve altın (anlık)</Text>
               {!!marketUpdatedAt && (
                 <Text style={styles.cardSubtitle}>Son güncelleme: {marketUpdatedAt}</Text>
@@ -1188,7 +1461,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 <View style={styles.rateIconAltin}>
                   <Text style={styles.rateIconTextAltin}>ALTIN</Text>
                 </View>
-                <Text style={styles.rateCode}>Gram Altın</Text>
+                <Text style={styles.rateCode}>Gram Altin</Text>
               </View>
               <Text style={styles.rateValue}>
                 {marketLoading
@@ -1207,7 +1480,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           </View>
         </View>
 
-        {/* YATIRIM GRAFİĞİ */}
+        {/* YATIRIM GRAFIGI */}
         <View style={styles.card}>
           <View style={styles.sectionHeaderRow}>
             <View>
@@ -1331,13 +1604,64 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
         </View>
 
       </ScrollView>
+
+      <Modal visible={detailModalVisible} animationType="fade" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.detailCard}>
+            <Text style={styles.detailTitle}>
+              {detailType === "reminders" ? "Yaklaşan Ödemeler" : "Akıllı Öneriler"}
+            </Text>
+            <Text style={styles.detailSub}>
+              {detailType === "reminders"
+                ? "Tüm ödeme detayları listesi"
+                : "Üretilen tüm öneriler"}
+            </Text>
+
+            {detailType === "reminders" ? (
+              remindersUpcoming.length === 0 ? (
+                <Text style={styles.detailEmpty}>Yaklaşan ödeme yok.</Text>
+              ) : (
+                <View style={styles.detailList}>
+                  {remindersUpcoming.map((r) => (
+                    <View key={`detail-${r.id}`} style={styles.suggestionRow}>
+                      <View style={styles.suggestionDot} />
+                      <Text style={styles.suggestionText}>
+                        {r.title} . {formatYMD(r.dueDate)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )
+            ) : suggestions.length === 0 ? (
+              <Text style={styles.detailEmpty}>Şu an öneri yok.</Text>
+            ) : (
+              <View style={styles.detailList}>
+                {suggestions.map((s, idx) => (
+                  <View key={`detail-s-${idx}`} style={styles.suggestionRow}>
+                    <View style={styles.suggestionDot} />
+                    <Text style={styles.suggestionText}>{s}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.detailClose}
+              onPress={() => setDetailModalVisible(false)}
+            >
+              <Text style={styles.detailCloseText}>Kapat</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       {/* Chat Button */}
       <TouchableOpacity
-        style={styles.chatFab}
+        style={[styles.chatFab, styles.chatFabActive]}
         onPress={() => navigation.navigate("Chat")}
-        activeOpacity={1}
+        activeOpacity={0.9}
       >
         <View style={styles.chatFabGlow} />
+        <View style={styles.chatAccent} />
         <View style={styles.chatIcon}>
           <View style={styles.chatBubble}>
             <View style={styles.chatDotRow}>
@@ -1348,13 +1672,14 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           </View>
           <View style={styles.chatTail} />
         </View>
+        <Text style={styles.chatLabel}>Sohbet</Text>
       </TouchableOpacity>
 
       {/* Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
 <View style={styles.sheet}>
-  <Text style={styles.sheetTitle}>Hesap Oluştur</Text>
+  <Text style={styles.sheetTitle}>Hesap Olustur</Text>
 
   <TextInput
     style={styles.input}
@@ -1428,7 +1753,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Bakiye Güncelle</Text>
             <Text style={styles.inputLabel}>
-              {selectedAccount ? selectedAccount.name : "Hesap"}
+              {selectedAccount?.name ?? "Hesap"}
             </Text>
 
             <TextInput
@@ -1467,7 +1792,33 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
 }
 
 const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
+  screen: { flex: 1, backgroundColor: colors.background, position: "relative" },
+  heroBackdrop: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 220,
+    overflow: "hidden",
+  },
+  heroOrbPrimary: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 260,
+    backgroundColor: colors.headerGlowA,
+    top: -110,
+    right: -60,
+  },
+  heroOrbSecondary: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 220,
+    backgroundColor: colors.headerGlowB,
+    top: -70,
+    left: -80,
+  },
 
   topBar: {
     paddingTop: 12,
@@ -1492,10 +1843,24 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
     borderWidth: 1,
     borderColor: colors.border,
   },
+  monthPagerItem: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthPagerCard: {
+        backgroundColor: colors.surface,
+    marginTop: 14,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardTitle: { color: colors.text, fontSize: 14, fontWeight: "800", letterSpacing: 0.6 },
   cardSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 4, fontWeight: "700" },
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  sectionHeaderActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  sectionLink: { color: colors.warning, fontSize: 12, fontWeight: "900" },
   sectionBadge: {
     minWidth: 28,
     height: 28,
@@ -1545,6 +1910,26 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   legendRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
   legendDot: { width: 10, height: 10, borderRadius: 10, marginRight: 8 },
   legendText: { color: colors.textMuted, fontSize: 12 },
+  monthPagerIndicator: {
+    marginTop: 6,
+    alignItems: "center",
+    gap: 6,
+  },
+  monthPagerDots: { flexDirection: "row", gap: 6 },
+  monthPagerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.borderStrong,
+    opacity: 0.6,
+  },
+  monthPagerDotActive: {
+    width: 18,
+    borderRadius: 3,
+    backgroundColor: colors.warning,
+    opacity: 1,
+  },
+  monthPagerHint: { color: colors.textMuted, fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
 
   chartArea: {
     marginTop: 14,
@@ -1565,6 +1950,14 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   legendSwatchIncome: { width: 12, height: 12, borderRadius: 4, backgroundColor: colors.warning },
   legendSwatchExpense: { width: 12, height: 12, borderRadius: 4, backgroundColor: colors.danger },
   legendText2: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginTop: 12,
+  },
+  inlineSection: {
+    marginTop: 12,
+  },
   loadingInline: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 },
   loadingText: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
   categoryDonutRow: {
@@ -1716,24 +2109,44 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   updateBtnText: { color: colors.warning, fontSize: 11, fontWeight: "900" },
   chatFab: {
     position: "absolute",
-    right: 18,
-    bottom: 18,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 999,
-    backgroundColor: colors.accent,
+    right: 16,
+    bottom: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: colors.borderStrong,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+    flexDirection: "row",
+    gap: 8,
+  },
+  chatFabActive: {
+    borderColor: colors.accent,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.2,
+  },
+  chatAccent: {
+    width: 4,
+    height: 28,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
   },
   chatIcon: { alignItems: "center", justifyContent: "center" },
   chatBubble: {
-    width: 22,
-    height: 18,
-    borderRadius: 8,
-    backgroundColor: colors.onAccent,
+    width: 20,
+    height: 16,
+    borderRadius: 6,
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1747,28 +2160,46 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   chatTail: {
     width: 6,
     height: 6,
-    backgroundColor: colors.onAccent,
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
     transform: [{ rotate: "45deg" }],
-    marginTop: -2,
+    marginTop: -3,
     marginLeft: 7,
     borderBottomRightRadius: 2,
   },
   chatFabGlow: {
     position: "absolute",
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: colors.warning,
-    opacity: 0.35,
-    top: -30,
-    right: -30,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.accentSoft,
+    opacity: 0.5,
+    top: -24,
+    right: -24,
   },
+  chatLabel: { color: colors.text, fontSize: 12, fontWeight: "800" },
 
   modalBackdrop: {
     flex: 1,
     backgroundColor: mode === "light" ? "rgba(15,23,42,0.35)" : "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
   },
+  detailCard: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxHeight: "70%",
+  },
+  detailTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  detailSub: { color: colors.textMuted, fontSize: 12, marginTop: 6, fontWeight: "700" },
+  detailList: { marginTop: 12, gap: 8 },
+  detailEmpty: { color: colors.textMuted, fontSize: 12, marginTop: 12 },
+  detailClose: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
+  detailCloseText: { color: colors.textMuted, fontWeight: "800" },
   sheet: {
     height: "50%",
     backgroundColor: colors.surface,
@@ -1949,5 +2380,4 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   kzUp: { color: colors.success },
   kzDown: { color: colors.danger },
 });
-
 

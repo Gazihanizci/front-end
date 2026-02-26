@@ -148,7 +148,7 @@ export default function NotesListScreen({ navigation }: Props) {
     <View style={styles.container}>
       <ScreenHeader
         title="Notlar"
-        subtitle="KÄ±sa notlarÄ±nÄ± sakla"
+        subtitle="Kısa notlarını sakla"
         left={
           <HeaderAction
             label="Geri"

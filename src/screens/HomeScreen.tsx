@@ -173,7 +173,10 @@ export default function HomeScreen({ navigation }: Props) {
   const toNum = (v: any) => {
     if (typeof v === "number") return Number.isFinite(v) ? v : 0;
     if (typeof v === "string") {
-      const normalized = v.replace(/\./g, "").replace(",", ".");
+      const s = v.trim();
+      const normalized = s.includes(",")
+        ? s.replace(/\./g, "").replace(",", ".")
+        : s.replace(",", ".");
       const n = Number(normalized);
       return Number.isFinite(n) ? n : 0;
     }
@@ -325,43 +328,42 @@ export default function HomeScreen({ navigation }: Props) {
     if (!marketTs) return null;
     return new Date(marketTs * 1000).toLocaleString("tr-TR");
   }, [marketTs]);
-  const liveGraph = useMemo<YatirimGraphResponse | null>(() => {
-    if (!marketData || yatirimlar.length === 0) return null;
-    const agg = new Map<string, { toplamMaliyet: number; guncelDeger: number }>();
+  const mineGraph = useMemo<YatirimGraphResponse | null>(() => {
+    if (yatirimlar.length === 0) return null;
+    const agg = new Map<
+      string,
+      { toplamMaliyet: number; guncelDeger: number; karZarar: number }
+    >();
     for (const y of yatirimlar) {
       const key = y.hesapAdi;
-      const marketPrice = getMarketPriceFor(y.varlikTuru);
-      const guncelDeger =
-        y.varlikTuru === "TL"
-          ? Number(y.adet)
-          : Number.isFinite(Number(marketPrice))
-          ? Number(y.adet) * Number(marketPrice)
-          : Number(y.guncelDeger);
       const toplamMaliyet = Number(y.toplamMaliyet) || 0;
-      const prev = agg.get(key) ?? { toplamMaliyet: 0, guncelDeger: 0 };
+      const guncelDeger = Number(y.guncelDeger) || 0;
+      const karZarar = Number(y.karZarar) || 0;
+      const prev = agg.get(key) ?? { toplamMaliyet: 0, guncelDeger: 0, karZarar: 0 };
       agg.set(key, {
         toplamMaliyet: prev.toplamMaliyet + toplamMaliyet,
-        guncelDeger: prev.guncelDeger + (Number.isFinite(guncelDeger) ? guncelDeger : 0),
+        guncelDeger: prev.guncelDeger + guncelDeger,
+        karZarar: prev.karZarar + karZarar,
       });
     }
     const points: YatirimGraphPointDto[] = Array.from(agg.entries()).map(([label, v]) => ({
       label,
       toplamMaliyet: String(v.toplamMaliyet),
       guncelDeger: String(v.guncelDeger),
-      karZarar: String(v.guncelDeger - v.toplamMaliyet),
+      karZarar: String(v.karZarar),
     }));
     const toplamMaliyet = points.reduce((s, p) => s + toNum(p.toplamMaliyet), 0);
     const toplamGuncelDeger = points.reduce((s, p) => s + toNum(p.guncelDeger), 0);
-    const toplamKarZarar = toplamGuncelDeger - toplamMaliyet;
+    const toplamKarZarar = points.reduce((s, p) => s + toNum(p.karZarar), 0);
     return {
       toplamMaliyet: String(toplamMaliyet),
       toplamGuncelDeger: String(toplamGuncelDeger),
       toplamKarZarar: String(toplamKarZarar),
       points,
     };
-  }, [marketData, yatirimlar, getMarketPriceFor]);
+  }, [yatirimlar]);
 
-  const dataToShow = liveGraph ?? graphData;
+  const dataToShow = mineGraph ?? graphData;
   const graphPoints = dataToShow?.points ?? [];
   const graphVisiblePoints = graphShowAll ? graphPoints : graphPoints.slice(0, 10);
   const chartPoints = useMemo(
@@ -955,11 +957,15 @@ export default function HomeScreen({ navigation }: Props) {
   const incomes = useMemo(() => son6Ay.map((x) => x.aylikGelir || 0), [son6Ay]);
   const expenses = useMemo(() => son6Ay.map((x) => x.aylikGider || 0), [son6Ay]);
 
-  const maxVal = Math.max(0, ...incomes, ...expenses);
+  const maxVal = Math.max(
+    0,
+    ...incomes.map((v) => Math.abs(v)),
+    ...expenses.map((v) => Math.abs(v))
+  );
 
   const calcHeight = (v: number) => {
     if (maxVal <= 0) return 0;
-    return Math.max(6, Math.round((v / maxVal) * 90));
+    return Math.max(6, Math.round((Math.abs(v) / maxVal) * 90));
   };
 
   // =========================
@@ -1243,7 +1249,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           <View style={styles.chartArea}>
             {loading6Ay ? (
               <Text style={{ color: colors.textMuted }}>Yükleniyor...</Text>
-            ) : months.length === 0 ? (
+            ) : months.length === 0 || maxVal === 0 ? (
               <Text style={{ color: colors.textMuted }}>Veri yok</Text>
             ) : (
               months.map((m, i) => {
@@ -1422,8 +1428,8 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           <View style={styles.rateGrid}>
             <View style={styles.rateCard}>
               <View style={styles.rateTop}>
-                <View style={styles.rateIcon}>
-                  <Text style={styles.rateIconText}>USD</Text>
+                <View style={[styles.rateIcon, styles.rateIconUsd]}>
+                  <Text style={[styles.rateIconText, styles.rateIconTextUsd]}>USD</Text>
                 </View>
                 <Text style={styles.rateCode}>Dolar / TL</Text>
               </View>
@@ -1434,8 +1440,8 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
 
             <View style={styles.rateCard}>
               <View style={styles.rateTop}>
-                <View style={styles.rateIcon}>
-                  <Text style={styles.rateIconText}>EUR</Text>
+                <View style={[styles.rateIcon, styles.rateIconEur]}>
+                  <Text style={[styles.rateIconText, styles.rateIconTextEur]}>EUR</Text>
                 </View>
                 <Text style={styles.rateCode}>Euro / TL</Text>
               </View>
@@ -1446,8 +1452,8 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
 
             <View style={styles.rateCard}>
               <View style={styles.rateTop}>
-                <View style={styles.rateIcon}>
-                  <Text style={styles.rateIconText}>GBP</Text>
+                <View style={[styles.rateIcon, styles.rateIconGbp]}>
+                  <Text style={[styles.rateIconText, styles.rateIconTextGbp]}>GBP</Text>
                 </View>
                 <Text style={styles.rateCode}>Sterlin / TL</Text>
               </View>
@@ -1458,8 +1464,8 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
 
             <View style={styles.rateCard}>
               <View style={styles.rateTop}>
-                <View style={styles.rateIconAltin}>
-                  <Text style={styles.rateIconTextAltin}>ALTIN</Text>
+                <View style={[styles.rateIcon, styles.rateIconGold]}>
+                  <Text style={[styles.rateIconText, styles.rateIconTextGold]}>ALTIN</Text>
                 </View>
                 <Text style={styles.rateCode}>Gram Altin</Text>
               </View>
@@ -1591,7 +1597,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                         <View style={styles.graphMetricPill}>
                           <Text style={styles.graphMetricLabel}>K/Z</Text>
                           <Text style={[styles.graphMetricValue, kz >= 0 ? styles.kzUp : styles.kzDown]}>
-                            ₺ {formatCompact(kz)}
+                            ₺ {formatTRY(kz)}
                           </Text>
                         </View>
                       </View>
@@ -2026,31 +2032,24 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.accentSoft,
-  },
-  rateIconAltin: {
-    height: 22,
-    paddingHorizontal: 8,
-    minWidth: 40,
-    borderRadius: 6,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
   },
   rateIconText: {
-    color: colors.warning,
     fontWeight: "900",
     fontSize: 11,
     lineHeight: 12,
     letterSpacing: 0.4,
   },
-  rateIconTextAltin: {
-    color: colors.success,
-    fontWeight: "900",
-    fontSize: 11,
-    lineHeight: 12,
-    letterSpacing: 0.4,
-  },
+  rateIconUsd: { borderColor: colors.accent },
+  rateIconEur: { borderColor: colors.success },
+  rateIconGbp: { borderColor: colors.danger },
+  rateIconGold: { borderColor: colors.warning },
+  rateIconTextUsd: { color: colors.accent },
+  rateIconTextEur: { color: colors.success },
+  rateIconTextGbp: { color: colors.danger },
+  rateIconTextGold: { color: colors.warning },
   rateCode: { color: colors.textMuted, fontSize: 12, fontWeight: "800", flexShrink: 1 },
   rateValue: { marginTop: 8, color: colors.text, fontSize: 16, fontWeight: "900" },
   rateChangeUp: { marginTop: 4, color: colors.success, fontSize: 12, fontWeight: "800" },

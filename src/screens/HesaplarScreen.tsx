@@ -62,6 +62,12 @@ export default function HesaplarScreen({ navigation }: Props) {
   const [actionAmount, setActionAmount] = useState("");
   const [actionTarget, setActionTarget] = useState<YatirimCreateResponse | null>(null);
   const [actionSaving, setActionSaving] = useState(false);
+  const [actionUseMarket, setActionUseMarket] = useState(true);
+  const [actionPriceText, setActionPriceText] = useState("");
+  const [renameVisible, setRenameVisible] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<YatirimCreateResponse | null>(null);
+  const [renameText, setRenameText] = useState("");
+  const [renameSaving, setRenameSaving] = useState(false);
 
   const [hesapAdi, setHesapAdi] = useState("");
   const [varlikTuru, setVarlikTuru] = useState<YatirimVarlikTuru>("USD");
@@ -243,7 +249,14 @@ export default function HesaplarScreen({ navigation }: Props) {
     setActionTarget(target);
     setActionAmount("");
     setActionType("AZALT");
+    setActionUseMarket(true);
+    setActionPriceText("");
     setActionVisible(true);
+  };
+  const openRename = (target: YatirimCreateResponse) => {
+    setRenameTarget(target);
+    setRenameText(target.hesapAdi ?? "");
+    setRenameVisible(true);
   };
 
   const handleActionSubmit = useCallback(async () => {
@@ -258,25 +271,48 @@ export default function HesaplarScreen({ navigation }: Props) {
 
     const actionMarketPrice = getMarketPriceFor(actionTarget.varlikTuru);
     if (actionType === "ARTIR") {
-      if (!Number.isFinite(Number(actionMarketPrice)) || Number(actionMarketPrice) <= 0) {
+      const manualPrice = parseNumberTR(actionPriceText);
+      const hasMarket = Number.isFinite(Number(actionMarketPrice));
+      const useMarket = actionUseMarket && hasMarket;
+      const priceToUse = useMarket ? Number(actionMarketPrice) : manualPrice;
+      if (!Number.isFinite(priceToUse) || priceToUse <= 0) {
         setMsgType("error");
-        setMsgText("Alış fiyatı (güncel) alınamadı. Lütfen daha sonra tekrar deneyin.");
+        setMsgText(useMarket ? "Güncel fiyat alınamadı. Lütfen elle girin." : "Alış fiyatı 0'dan büyük olmalı.");
         setMsgVisible(true);
         return;
       }
+
+      setActionSaving(true);
+      try {
+        const data = await increaseYatirim(actionTarget.yatirimId, Math.abs(amount), priceToUse);
+        setMsgType("success");
+        setMsgText(`Yeni bakiye: ${data.adet}`);
+        setMsgVisible(true);
+        setActionVisible(false);
+        setActionTarget(null);
+        setActionAmount("");
+        fetchMyYatirimlar();
+      } catch (e: any) {
+        const msg =
+          e?.response?.data?.message ||
+          e?.response?.data?.error ||
+          e?.response?.data?.detail ||
+          e?.response?.data ||
+          e?.message ||
+          "İşlem başarısız.";
+        setMsgType("error");
+        setMsgText(String(msg));
+        setMsgVisible(true);
+      } finally {
+        setActionSaving(false);
+      }
+      return;
     }
 
-    const delta = actionType === "AZALT" ? -Math.abs(amount) : Math.abs(amount);
+    const delta = -Math.abs(amount);
     setActionSaving(true);
     try {
-      const data =
-        actionType === "ARTIR"
-          ? await increaseYatirim(
-              actionTarget.yatirimId,
-              Math.abs(amount),
-              Number(actionMarketPrice)
-            )
-          : await changeYatirimAdet(actionTarget.yatirimId, delta);
+      const data = await changeYatirimAdet(actionTarget.yatirimId, delta);
       setMsgType("success");
       setMsgText(`Yeni bakiye: ${data.adet}`);
       setMsgVisible(true);
@@ -298,7 +334,39 @@ export default function HesaplarScreen({ navigation }: Props) {
     } finally {
       setActionSaving(false);
     }
-  }, [actionAmount, actionTarget, actionType, fetchMyYatirimlar, getMarketPriceFor]);
+  }, [actionAmount, actionTarget, actionType, actionPriceText, actionUseMarket, fetchMyYatirimlar, getMarketPriceFor]);
+
+  const handleRenameSubmit = useCallback(async () => {
+    if (!renameTarget || renameSaving) return;
+    const text = renameText.trim();
+    if (!text) return;
+    setRenameSaving(true);
+    try {
+      await api.put(`/api/yatirim/mine/${renameTarget.yatirimId}/hesap-adi`, {
+        hesapAdi: text,
+      });
+      setMsgType("success");
+      setMsgText("Hesap adı güncellendi.");
+      setMsgVisible(true);
+      setRenameVisible(false);
+      setRenameTarget(null);
+      setRenameText("");
+      fetchMyYatirimlar();
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.response?.data?.detail ||
+        e?.response?.data ||
+        e?.message ||
+        "Hesap adı güncellenemedi.";
+      setMsgType("error");
+      setMsgText(String(msg));
+      setMsgVisible(true);
+    } finally {
+      setRenameSaving(false);
+    }
+  }, [renameTarget, renameSaving, renameText, fetchMyYatirimlar]);
 
   return (
     <View style={styles.container}>
@@ -412,19 +480,9 @@ export default function HesaplarScreen({ navigation }: Props) {
           <Text style={styles.muted}>Yatırım hesabı yok.</Text>
         ) : (
           yatirimlar.map((y) => {
-            const marketPrice = getMarketPriceFor(y.varlikTuru);
-            const liveGuncelDeger =
-              y.varlikTuru === "TL"
-                ? Number(y.adet)
-                : Number.isFinite(Number(marketPrice))
-                ? Number(y.adet) * Number(marketPrice)
-                : Number(y.guncelDeger);
-            const liveKarZarar = Number(liveGuncelDeger) - Number(y.toplamMaliyet);
-            const displayKarZarar = Number.isFinite(liveKarZarar) ? liveKarZarar : Number(y.karZarar);
-            const displayGuncelDeger = Number.isFinite(Number(liveGuncelDeger))
-              ? Number(liveGuncelDeger)
-              : Number(y.guncelDeger);
-            const isUp = Number(displayKarZarar) >= 0;
+            const displayKarZarar = Number(y.karZarar) || 0;
+            const displayGuncelDeger = Number(y.guncelDeger) || 0;
+            const isUp = displayKarZarar >= 0;
             return (
               <View key={y.yatirimId} style={styles.card}>
                 <View style={{ flex: 1 }}>
@@ -438,7 +496,7 @@ export default function HesaplarScreen({ navigation }: Props) {
                 </View>
                 <View style={styles.cardRight}>
                   <Text style={[styles.karZarar, isUp ? styles.karZararUp : styles.karZararDown]}>
-                    {isUp ? "+" : "-"}₺ {formatTRY(Math.abs(Number(displayKarZarar)))}
+                    {isUp ? "+" : "-"}₺ {formatTRY(Math.abs(displayKarZarar))}
                   </Text>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => openAction(y)}>
                     <Text style={styles.actionBtnText}>İşlemler</Text>
@@ -476,6 +534,15 @@ export default function HesaplarScreen({ navigation }: Props) {
               })}
             </View>
 
+            <View style={styles.sectionDivider} />
+            <TouchableOpacity
+              style={styles.renameRow}
+              onPress={() => actionTarget && openRename(actionTarget)}
+            >
+              <Text style={styles.renameRowText}>Adı Düzenle</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+
             <Text style={styles.label}>Miktar</Text>
             <TextInput
               value={actionAmount}
@@ -488,16 +555,57 @@ export default function HesaplarScreen({ navigation }: Props) {
 
             {actionTarget?.varlikTuru !== "TL" && (
               <>
-                <Text style={styles.label}>Güncel Fiyat</Text>
-                <View style={styles.readonlyBox}>
-                  <Text style={styles.readonlyText}>
-                    {marketLoading
-                      ? "Yükleniyor..."
-                      : Number.isFinite(Number(getMarketPriceFor(actionTarget?.varlikTuru)))
-                      ? formatTRY(Number(getMarketPriceFor(actionTarget?.varlikTuru)))
-                      : "Veri yok"}
-                  </Text>
-                </View>
+                <Text style={styles.label}>
+                  {actionType === "ARTIR" ? "Alış Fiyatı" : "Güncel Fiyat Tercihi"}
+                </Text>
+                {Number.isFinite(Number(getMarketPriceFor(actionTarget?.varlikTuru))) ? (
+                  <>
+                    <View style={styles.segmentRow}>
+                      {(["ANLIK", "ELLE"] as const).map((t) => {
+                        const active = actionUseMarket ? t === "ANLIK" : t === "ELLE";
+                        return (
+                          <TouchableOpacity
+                            key={t}
+                            style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+                            onPress={() => setActionUseMarket(t === "ANLIK")}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                              {t === "ANLIK" ? "Anlık" : "Elle Gir"}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    {actionUseMarket ? (
+                      <View style={styles.readonlyBox}>
+                        <Text style={styles.readonlyText}>
+                          {marketLoading
+                            ? "Yükleniyor..."
+                            : formatTRY(Number(getMarketPriceFor(actionTarget?.varlikTuru)))}
+                        </Text>
+                      </View>
+                    ) : (
+                      <TextInput
+                        value={actionPriceText}
+                        onChangeText={setActionPriceText}
+                        placeholder="Örn: 32,50"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        style={styles.input}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <TextInput
+                    value={actionPriceText}
+                    onChangeText={setActionPriceText}
+                    placeholder="Örn: 32,50"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    style={styles.input}
+                  />
+                )}
               </>
             )}
 
@@ -520,6 +628,47 @@ export default function HesaplarScreen({ navigation }: Props) {
                 setActionTarget(null);
               }}
               disabled={actionSaving}
+            >
+              <Text style={styles.cancelText}>Vazgeç</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {renameVisible && (
+        <View style={styles.actionOverlay}>
+          <View style={styles.actionSheet}>
+            <Text style={styles.actionTitle}>Hesap Adını Düzenle</Text>
+            <Text style={styles.actionSubtitle}>{renameTarget?.hesapAdi}</Text>
+
+            <Text style={styles.label}>Yeni Hesap Adı</Text>
+            <TextInput
+              value={renameText}
+              onChangeText={setRenameText}
+              placeholder="Örn: Dolar Yatırımı"
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+            />
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, renameSaving && { opacity: 0.7 }]}
+              onPress={handleRenameSubmit}
+              disabled={renameSaving}
+            >
+              {renameSaving ? (
+                <ActivityIndicator color={colors.onAccent} />
+              ) : (
+                <Text style={styles.primaryBtnText}>Kaydet</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => {
+                setRenameVisible(false);
+                setRenameTarget(null);
+              }}
+              disabled={renameSaving}
             >
               <Text style={styles.cancelText}>Vazgeç</Text>
             </TouchableOpacity>
@@ -648,6 +797,19 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.borderStrong,
     },
     actionBtnText: { color: colors.text, fontSize: 11, fontWeight: "800" },
+    renameRow: {
+      marginTop: 10,
+      paddingVertical: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    renameRowText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+    sectionDivider: {
+      height: 1,
+      backgroundColor: colors.divider,
+      marginTop: 8,
+    },
 
     actionOverlay: {
       position: "absolute",

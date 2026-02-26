@@ -16,9 +16,17 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import { ThemeColors, ThemeMode, useTheme } from "../theme/theme";
-import { createNote, deleteNote, listNotes, NotResponse, updateNote } from "../services/notesApi";
+import api from "../config/api";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Notlar">;
+type NoteType = "USER" | "FAMILY";
+type NotResponse = {
+  notId: number;
+  notMetini: string;
+  createdAt: string;
+  notTuru: NoteType;
+  aileId: number | null;
+};
 
 export default function NotesListScreen({ navigation }: Props) {
   const { colors, mode } = useTheme();
@@ -28,18 +36,22 @@ export default function NotesListScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<NoteType>("USER");
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingNote, setEditingNote] = useState<NotResponse | null>(null);
   const [noteText, setNoteText] = useState("");
+  const [noteType, setNoteType] = useState<NoteType>("USER");
   const [saving, setSaving] = useState(false);
 
-  const fetchNotes = useCallback(async () => {
+  const fetchNotes = useCallback(async (type: NoteType) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listNotes();
-      setItems(data);
+      const url = type === "USER" ? "/api/notlar" : "/api/notlar/aile";
+      const res = await api.get(url);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setItems(data as NotResponse[]);
     } catch (err: any) {
       console.log("Notlar listesi hata:", err?.response?.data || err?.message);
       setError("Notlar yüklenemedi.");
@@ -50,27 +62,29 @@ export default function NotesListScreen({ navigation }: Props) {
   }, []);
 
   useEffect(() => {
-    fetchNotes();
-  }, [fetchNotes]);
+    fetchNotes(activeTab);
+  }, [fetchNotes, activeTab]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetchNotes();
+      await fetchNotes(activeTab);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchNotes]);
+  }, [fetchNotes, activeTab]);
 
   const openCreate = () => {
     setEditingNote(null);
     setNoteText("");
+    setNoteType(activeTab);
     setModalVisible(true);
   };
 
   const openEdit = (note: NotResponse) => {
     setEditingNote(note);
     setNoteText(note.notMetini);
+    setNoteType(note.notTuru);
     setModalVisible(true);
   };
 
@@ -89,12 +103,16 @@ export default function NotesListScreen({ navigation }: Props) {
     setError(null);
     try {
       if (editingNote) {
-        await updateNote(editingNote.notId, text);
+        const url =
+          editingNote.notTuru === "FAMILY"
+            ? `/api/notlar/aile/${editingNote.notId}`
+            : `/api/notlar/${editingNote.notId}`;
+        await api.put(url, { notMetini: text, notTuru: editingNote.notTuru });
       } else {
-        await createNote(text);
+        await api.post("/api/notlar", { notMetini: text, notTuru: noteType });
       }
       closeModal();
-      await fetchNotes();
+      await fetchNotes(activeTab);
     } catch (err: any) {
       console.log("Not kaydetme hata:", err?.response?.data || err?.message);
       setError("Not kaydedilemedi.");
@@ -111,7 +129,9 @@ export default function NotesListScreen({ navigation }: Props) {
         style: "destructive",
         onPress: async () => {
           try {
-            await deleteNote(note.notId);
+            const url =
+              note.notTuru === "FAMILY" ? `/api/notlar/aile/${note.notId}` : `/api/notlar/${note.notId}`;
+            await api.delete(url);
             setItems((prev) => prev.filter((x) => x.notId !== note.notId));
           } catch (err: any) {
             console.log("Not silme hata:", err?.response?.data || err?.message);
@@ -130,7 +150,12 @@ export default function NotesListScreen({ navigation }: Props) {
           <Text style={styles.noteText} numberOfLines={3}>
             {item.notMetini}
           </Text>
-          <Text style={styles.noteDate}>{created}</Text>
+          <View style={styles.noteMetaRow}>
+            <View style={[styles.noteBadge, item.notTuru === "FAMILY" ? styles.badgeFamily : styles.badgeUser]}>
+              <Text style={styles.noteBadgeText}>{item.notTuru === "FAMILY" ? "Aile" : "Kişisel"}</Text>
+            </View>
+            <Text style={styles.noteDate}>{created}</Text>
+          </View>
         </View>
         <View style={styles.noteActions}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => openEdit(item)} activeOpacity={0.8}>
@@ -167,6 +192,23 @@ export default function NotesListScreen({ navigation }: Props) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.warning} />}
         ListHeaderComponent={
           <View style={styles.headerRow}>
+            <View style={styles.tabRow}>
+              {(["USER", "FAMILY"] as NoteType[]).map((t) => {
+                const active = activeTab === t;
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.tabBtn, active && styles.tabBtnActive]}
+                    onPress={() => setActiveTab(t)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.tabText, active && styles.tabTextActive]}>
+                      {t === "USER" ? "Kişisel Notlar" : "Aile Notları"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
             <TouchableOpacity style={styles.newBtn} onPress={openCreate} activeOpacity={0.85}>
               <Ionicons name="add" size={18} color={colors.onAccent} />
               <Text style={styles.newBtnText}>Yeni Not</Text>
@@ -222,7 +264,23 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background, paddingTop: 14 },
     listContent: { paddingHorizontal: 16, paddingBottom: 28, gap: 10 },
-    headerRow: { marginBottom: 6 },
+    headerRow: { marginBottom: 6, gap: 10 },
+    tabRow: { flexDirection: "row", gap: 8 },
+    tabBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      alignItems: "center",
+    },
+    tabBtnActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    tabText: { color: colors.text, fontWeight: "800", fontSize: 12 },
+    tabTextActive: { color: colors.onAccent },
     newBtn: {
       alignSelf: "flex-start",
       flexDirection: "row",
@@ -245,7 +303,19 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) =>
       gap: 10,
     },
     noteText: { color: colors.text, fontSize: 14, fontWeight: "700" },
-    noteDate: { color: colors.textMuted, fontSize: 11, marginTop: 6, fontWeight: "700" },
+    noteMetaRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8 },
+    noteDate: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
+    noteBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.surfaceAlt,
+    },
+    noteBadgeText: { color: colors.text, fontSize: 10, fontWeight: "900" },
+    badgeUser: {},
+    badgeFamily: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
     noteActions: { flexDirection: "row", gap: 8 },
     iconBtn: {
       width: 34,

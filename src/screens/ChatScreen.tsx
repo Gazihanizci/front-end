@@ -14,7 +14,7 @@ import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import { ThemeColors, ThemeMode, useTheme } from "../theme/theme";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
-import api from "../config/api";
+import api, { BASE_URL } from "../config/api";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -29,6 +29,13 @@ type Forecast = {
   h1: number;
   h3: number;
   h7: number;
+};
+
+type MarketLatestResponse = {
+  ok: boolean;
+  ts: number;
+  source?: string;
+  data: Record<string, { value: number }>;
 };
 
 type FxAssistantItem = {
@@ -82,6 +89,9 @@ export default function ChatScreen({ navigation }: Props) {
   const [fxData, setFxData] = useState<FxAssistantItem[]>([]);
   const [fxLoading, setFxLoading] = useState(false);
   const [fxError, setFxError] = useState<string | null>(null);
+  const [marketData, setMarketData] = useState<MarketLatestResponse["data"] | null>(null);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [marketError, setMarketError] = useState<string | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
@@ -89,6 +99,35 @@ export default function ChatScreen({ navigation }: Props) {
     "market" | "summary" | "category" | "investment" | null
   >(null);
   const scrollRef = useRef<ScrollView | null>(null);
+
+  const marketBaseUrl = useMemo(() => {
+    const raw = String(BASE_URL || "").trim();
+    const match = raw.match(/^(https?:)\/\/([^:/]+)/i);
+    if (match) {
+      const protocol = match[1];
+      const host = match[2];
+      return `${protocol}//${host}:8090`;
+    }
+    return "http://127.0.0.1:8090";
+  }, []);
+
+  const fetchMarketLatest = useCallback(async () => {
+    setMarketLoading(true);
+    setMarketError(null);
+    try {
+      const res = await api.get(`${marketBaseUrl}/api/market/latest`);
+      const payload: MarketLatestResponse = res.data;
+      if (payload?.ok && payload?.data) {
+        setMarketData(payload.data);
+      } else {
+        throw new Error("Market verisi alınamadı");
+      }
+    } catch (err: any) {
+      setMarketError(err?.message || "Market isteği başarısız");
+    } finally {
+      setMarketLoading(false);
+    }
+  }, [marketBaseUrl]);
 
   const fetchFxData = useCallback(async () => {
     setFxLoading(true);
@@ -114,7 +153,8 @@ export default function ChatScreen({ navigation }: Props) {
 
   useEffect(() => {
     fetchFxData();
-  }, [fetchFxData]);
+    fetchMarketLatest();
+  }, [fetchFxData, fetchMarketLatest]);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -130,6 +170,106 @@ export default function ChatScreen({ navigation }: Props) {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+  const normalizeText = useCallback((text: string) => {
+    const cleaned = text
+      .toLowerCase()
+      .replace(/[^a-z0-9ığüşöçİĞÜŞÖÇ\s]/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const synonyms: Array<[RegExp, string]> = [
+      [/\bgelirlerim\b/g, "gelir"],
+      [/\bgiderlerim\b/g, "gider"],
+      [/\bharcamalarım\b/g, "gider"],
+      [/\bharcamalarim\b/g, "gider"],
+      [/\bharcama\b/g, "gider"],
+      [/\bmasraf\b/g, "gider"],
+      [/\bmasraflar\b/g, "gider"],
+      [/\bödeme\b/g, "gider"],
+      [/\bödemeler\b/g, "gider"],
+      [/\bne kadar\b/g, "kaç"],
+      [/\bne oldu\b/g, "kaç"],
+    ];
+    return synonyms.reduce((acc, [rx, repl]) => acc.replace(rx, repl), cleaned);
+  }, []);
+  const detectIntent = useCallback((text: string) => {
+    const t = normalizeText(text);
+    const rules: Array<{
+      id:
+        | "LAST_MONTH_SPEND_EXPLAIN"
+        | "MONTHLY_INCOME_CURRENT"
+        | "MONTHLY_EXPENSE_CURRENT"
+        | "MONTHLY_INCOME_LAST"
+        | "MONTHLY_EXPENSE_LAST"
+        | "MONTHLY_COMPARE"
+        | "TOP_EXPENSE_CURRENT"
+        | "TOP_EXPENSE_LAST"
+        | "CATEGORY_CURRENT"
+        | "CATEGORY_LAST"
+        | "INVESTMENT_SUMMARY"
+        | "MARKET_RATES";
+      keywords: string[];
+      regex?: RegExp[];
+      score?: number;
+    }> = [
+      { id: "LAST_MONTH_SPEND_EXPLAIN", keywords: ["geçen ay", "gider"], regex: [/açıklama|detay/] },
+      { id: "MONTHLY_INCOME_CURRENT", keywords: ["bu ay", "gelir"], regex: [/toplam|kaç/] },
+      { id: "MONTHLY_EXPENSE_CURRENT", keywords: ["bu ay", "gider"], regex: [/toplam|kaç/] },
+      { id: "MONTHLY_INCOME_LAST", keywords: ["geçen ay", "gelir"], regex: [/toplam|kaç/] },
+      { id: "MONTHLY_EXPENSE_LAST", keywords: ["geçen ay", "gider"], regex: [/toplam|kaç/] },
+      { id: "MONTHLY_COMPARE", keywords: ["bu ay", "geçen ay"], regex: [/kıyas|karşılaştır|fark/] },
+      { id: "TOP_EXPENSE_CURRENT", keywords: ["bu ay", "en", "gider"], regex: [/yüksek|çok|en çok/] },
+      { id: "TOP_EXPENSE_LAST", keywords: ["geçen ay", "en", "gider"], regex: [/yüksek|çok|en çok/] },
+      { id: "CATEGORY_CURRENT", keywords: ["bu ay", "kategori"], regex: [/kırılım|dağılım/] },
+      { id: "CATEGORY_LAST", keywords: ["geçen ay", "kategori"], regex: [/kırılım|dağılım/] },
+      { id: "INVESTMENT_SUMMARY", keywords: ["yatırım"], regex: [/kar|zarar|k\/z|özeti|özet/] },
+      {
+        id: "MARKET_RATES",
+        keywords: ["anlık", "canlı", "güncel", "şu an", "spot", "anlık kur", "güncel kur"],
+      },
+    ];
+
+    let best: { id: (typeof rules)[number]["id"]; score: number } | null = null;
+    for (const r of rules) {
+      let score = r.score ?? 0;
+      let keywordHit = false;
+      for (const k of r.keywords) {
+        if (t.includes(k)) {
+          score += 2;
+          keywordHit = true;
+        }
+      }
+      if (keywordHit || r.keywords.length === 0) {
+        for (const rx of r.regex ?? []) {
+          if (rx.test(t)) score += 2;
+        }
+      }
+      if (score > 0 && (!best || score > best.score)) {
+        best = { id: r.id, score };
+      }
+    }
+    return best?.id ?? null;
+  }, [normalizeText]);
+  const inferPredictSymbol = useCallback((text: string) => {
+    const t = normalizeText(text);
+    if (t.includes("dolar") || t.includes("usd")) return "USDTRY";
+    if (t.includes("euro") || t.includes("eur")) return "EURTRY";
+    if (t.includes("sterlin") || t.includes("gbp")) return "GBPTRY";
+    if (t.includes("altın") || t.includes("gram")) return "XAUUSD";
+    if (t.includes("bitcoin") || t.includes("btc")) return "BTCUSD";
+    if (t.includes("ethereum") || t.includes("eth")) return "ETHUSD";
+    return null;
+  }, [normalizeText]);
+  const getRate = useCallback(
+    (keys: string[]) => {
+      if (!marketData) return undefined;
+      for (const k of keys) {
+        const val = marketData[k]?.value;
+        if (Number.isFinite(val)) return val;
+      }
+      return undefined;
+    },
+    [marketData]
+  );
   const normalizeSymbol = (label: string) => label.split(" ")[0].trim();
   const buildPrompt = (symbol: string) => `${symbol} hakkında bilgi almak istiyorum.`;
   const nowTime = () =>
@@ -184,6 +324,7 @@ export default function ChatScreen({ navigation }: Props) {
     setInputText("");
     const lowered = text.toLowerCase();
     const hasAny = (patterns: string[]) => patterns.some((p) => lowered.includes(p));
+    const intent = detectIntent(text);
 
     const getAnalizFor = async (key: string) => {
       const analizList = await fetchMonthlyAnaliz();
@@ -197,7 +338,7 @@ export default function ChatScreen({ navigation }: Props) {
       ]);
     };
 
-    if (lowered.includes("geçen ay harcama")) {
+    if (intent === "LAST_MONTH_SPEND_EXPLAIN" || lowered.includes("geçen ay harcama")) {
       try {
         const lastKey = lastMonthKey();
         const currentKey = currentMonthKey();
@@ -258,14 +399,35 @@ export default function ChatScreen({ navigation }: Props) {
     }
 
     if (
-      hasAny([
-        "bu ay toplam gelir",
-        "bu ayki gelir",
-        "bu ay gelir",
-        "bu ay gelirlerim",
-        "bu ay gelirlerim neler",
-      ])
+      intent === "MARKET_RATES" &&
+      hasAny(["anlık", "canlı", "güncel", "şu an", "spot", "anlık kur", "güncel kur"])
     ) {
+      const usd = getRate(["USDTRY", "USD/TRY", "USD_TRY"]);
+      const eur = getRate(["EURTRY", "EUR/TRY", "EUR_TRY"]);
+      const gbp = getRate(["GBPTRY", "GBP/TRY", "GBP_TRY"]);
+      const gold = getRate(["GRAM_ALTIN_TRY", "GRAM_ALTIN", "GRAM/TRY", "XAU_TRY", "XAUTRY"]);
+
+      const lines: string[] = [];
+      if (hasAny(["dolar", "usd"]) && Number.isFinite(usd)) {
+        lines.push(`USD/TRY: ₺ ${formatTRY(usd as number)}`);
+      }
+      if (hasAny(["euro", "eur"]) && Number.isFinite(eur)) {
+        lines.push(`EUR/TRY: ₺ ${formatTRY(eur as number)}`);
+      }
+      if (hasAny(["sterlin", "gbp"]) && Number.isFinite(gbp)) {
+        lines.push(`GBP/TRY: ₺ ${formatTRY(gbp as number)}`);
+      }
+      if (hasAny(["altın", "gram"]) && Number.isFinite(gold)) {
+        lines.push(`Gram Altın: ₺ ${formatTRY(gold as number)}`);
+      }
+
+      if (lines.length === 0) {
+        return replyWithText("Kur verileri şu an alınamadı. Biraz sonra tekrar dener misin?");
+      }
+      return replyWithText(lines.join("\n"));
+    }
+
+    if (intent === "MONTHLY_INCOME_CURRENT" || hasAny(["bu ay toplam gelir", "bu ayki gelir"])) {
       const key = currentMonthKey();
       const analiz = await getAnalizFor(key);
       return replyWithText(
@@ -275,16 +437,7 @@ export default function ChatScreen({ navigation }: Props) {
       );
     }
 
-    if (
-      hasAny([
-        "bu ay toplam gider",
-        "bu ayki gider",
-        "bu ay gider",
-        "bu ay giderlerim",
-        "bu ayki giderlerim neler",
-        "bu ay giderlerim neler",
-      ])
-    ) {
+    if (intent === "MONTHLY_EXPENSE_CURRENT" || hasAny(["bu ay toplam gider", "bu ayki gider"])) {
       const key = currentMonthKey();
       const analiz = await getAnalizFor(key);
       return replyWithText(
@@ -294,7 +447,7 @@ export default function ChatScreen({ navigation }: Props) {
       );
     }
 
-    if (lowered.includes("geçen ay toplam gelir")) {
+    if (intent === "MONTHLY_INCOME_LAST" || lowered.includes("geçen ay toplam gelir")) {
       const key = lastMonthKey();
       const analiz = await getAnalizFor(key);
       return replyWithText(
@@ -304,7 +457,7 @@ export default function ChatScreen({ navigation }: Props) {
       );
     }
 
-    if (lowered.includes("geçen ay toplam gider")) {
+    if (intent === "MONTHLY_EXPENSE_LAST" || lowered.includes("geçen ay toplam gider")) {
       const key = lastMonthKey();
       const analiz = await getAnalizFor(key);
       return replyWithText(
@@ -314,7 +467,7 @@ export default function ChatScreen({ navigation }: Props) {
       );
     }
 
-    if (lowered.includes("bu ay vs geçen ay kıyas") || lowered.includes("kıyas")) {
+    if (intent === "MONTHLY_COMPARE" || lowered.includes("bu ay vs geçen ay kıyas") || lowered.includes("kıyas")) {
       const lastKey = lastMonthKey();
       const currentKey = currentMonthKey();
       const [lastAnaliz, currentAnaliz] = await Promise.all([
@@ -336,7 +489,7 @@ export default function ChatScreen({ navigation }: Props) {
       );
     }
 
-    if (lowered.includes("bu ay en çok gider")) {
+    if (intent === "TOP_EXPENSE_CURRENT" || lowered.includes("bu ay en çok gider")) {
       const key = currentMonthKey();
       const summary = await fetchMonthlySummary(key);
       const expenses = summary.filter((x) => x.tip === "GIDER");
@@ -348,7 +501,7 @@ export default function ChatScreen({ navigation }: Props) {
       );
     }
 
-    if (lowered.includes("geçen ay en çok gider")) {
+    if (intent === "TOP_EXPENSE_LAST" || lowered.includes("geçen ay en çok gider")) {
       const key = lastMonthKey();
       const summary = await fetchMonthlySummary(key);
       const expenses = summary.filter((x) => x.tip === "GIDER");
@@ -360,7 +513,7 @@ export default function ChatScreen({ navigation }: Props) {
       );
     }
 
-    if (lowered.includes("bu ay kategori") || lowered.includes("kategori kırılımı bu ay")) {
+    if (intent === "CATEGORY_CURRENT" || lowered.includes("kategori kırılımı bu ay")) {
       const key = currentMonthKey();
       const summary = await fetchMonthlySummary(key);
       const expenses = summary.filter((x) => x.tip === "GIDER");
@@ -374,7 +527,7 @@ export default function ChatScreen({ navigation }: Props) {
       );
     }
 
-    if (lowered.includes("geçen ay kategori") || lowered.includes("kategori kırılımı geçen ay")) {
+    if (intent === "CATEGORY_LAST" || lowered.includes("kategori kırılımı geçen ay")) {
       const key = lastMonthKey();
       const summary = await fetchMonthlySummary(key);
       const expenses = summary.filter((x) => x.tip === "GIDER");
@@ -388,7 +541,7 @@ export default function ChatScreen({ navigation }: Props) {
       );
     }
 
-    if (lowered.includes("yatırım")) {
+    if (intent === "INVESTMENT_SUMMARY" || lowered.includes("yatırım")) {
       const data = await fetchYatirimGraph("HESAP");
       if (!data) {
         return replyWithText("Yatırım verisi alınamadı.");
@@ -406,7 +559,9 @@ export default function ChatScreen({ navigation }: Props) {
 
     const data = await fetchFxData();
     if (data && data.length > 0) {
-      const filtered = selectedSymbol ? data.filter((x) => x.symbol === selectedSymbol) : data;
+      const inferred = inferPredictSymbol(text);
+      const filterSymbol = inferred ?? selectedSymbol;
+      const filtered = filterSymbol ? data.filter((x) => x.symbol === filterSymbol) : data;
       if (filtered.length > 0) {
         const lines = filtered
           .slice(0, 3)
@@ -427,9 +582,14 @@ export default function ChatScreen({ navigation }: Props) {
   }, [
     inputText,
     fetchFxData,
+    fetchMarketLatest,
     selectedSymbol,
     fetchMonthlySummary,
     fetchMonthlyAnaliz,
+    getRate,
+    detectIntent,
+    normalizeText,
+    inferPredictSymbol,
   ]);
 
   return (
@@ -442,7 +602,7 @@ export default function ChatScreen({ navigation }: Props) {
         title="SOHBET"
         subtitle="Piyasa Asistanı"
         left={<HeaderAction label="Geri" onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))} />}
-        right={<HeaderAction label="Yenile" onPress={fetchFxData} />}
+        right={<HeaderAction label="Yenile" onPress={() => { fetchFxData(); fetchMarketLatest(); }} />}
       />
 
       <View style={styles.heroWrap}>
@@ -604,11 +764,12 @@ export default function ChatScreen({ navigation }: Props) {
           ) : null}
         </View>
 
-        {fxLoading || fxError ? (
+        {fxLoading || fxError || marketLoading || marketError ? (
           <View style={styles.stateBox}>
-            {fxLoading ? <ActivityIndicator /> : null}
-            {fxLoading ? <Text style={styles.stateText}>Yükleniyor...</Text> : null}
+            {fxLoading || marketLoading ? <ActivityIndicator /> : null}
+            {fxLoading || marketLoading ? <Text style={styles.stateText}>Yükleniyor...</Text> : null}
             {fxError ? <Text style={styles.errorText}>Hata: {fxError}</Text> : null}
+            {marketError ? <Text style={styles.errorText}>Hata: {marketError}</Text> : null}
           </View>
         ) : null}
       </ScrollView>

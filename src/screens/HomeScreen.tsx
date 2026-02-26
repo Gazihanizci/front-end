@@ -1202,7 +1202,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                     );
                   })}
                 </View>
-                <Text style={styles.monthPagerHint}>Kaydir</Text>
+                <Text style={styles.monthPagerHint}>Kaydır</Text>
               </View>
             ) : null}
           </>

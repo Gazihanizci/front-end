@@ -37,7 +37,8 @@ export default function MessageBox({
   const isError = type === "error";
   const showConfirm = typeof onConfirm === "function";
   const statusColor = isSuccess ? colors.success : isError ? colors.danger : colors.accent;
-  const overlayColor = mode === "light" ? "rgba(15,23,42,0.45)" : "rgba(0,0,0,0.65)";
+  const overlayColor = mode === "light" ? "rgba(10,20,35,0.45)" : "rgba(0,0,0,0.7)";
+  const badgeLabel = isSuccess ? "Başarılı" : isError ? "Hata" : "Bilgi";
 
   return (
     <Modal
@@ -48,7 +49,12 @@ export default function MessageBox({
     >
       <View style={[styles.overlay, { backgroundColor: overlayColor }]}>
         <View style={styles.box}>
-          <Text style={[styles.title, { color: statusColor }]}>{title}</Text>
+          <View style={styles.badgeRow}>
+            <View style={[styles.badgeDot, { backgroundColor: statusColor }]} />
+            <Text style={[styles.badgeText, { color: statusColor }]}>{badgeLabel}</Text>
+          </View>
+
+          <Text style={styles.title}>{title}</Text>
 
           <Text style={styles.message}>{message}</Text>
 
@@ -86,25 +92,47 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: "center",
     },
     box: {
-      width: "85%",
+      width: "86%",
       backgroundColor: colors.surface,
-      borderRadius: 16,
-      padding: 20,
+      borderRadius: 20,
+      padding: 18,
       borderWidth: 1,
       borderColor: colors.border,
+      shadowColor: "#000",
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 4,
+    },
+    badgeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 8,
+    },
+    badgeDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    badgeText: {
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0.2,
     },
     title: {
-      fontSize: 20,
-      fontWeight: "700",
-      textAlign: "center",
-      marginBottom: 10,
+      fontSize: 18,
+      fontWeight: "900",
+      color: colors.text,
+      textAlign: "left",
+      marginBottom: 6,
     },
     message: {
-      fontSize: 15,
+      fontSize: 14,
       color: colors.text,
-      textAlign: "center",
-      marginBottom: 20,
-      lineHeight: 22,
+      textAlign: "left",
+      marginBottom: 16,
+      lineHeight: 20,
     },
     actions: {
       flexDirection: "row",
@@ -112,19 +140,26 @@ const createStyles = (colors: ThemeColors) =>
     },
     button: {
       flex: 1,
-      paddingVertical: 12,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
       borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
-      minHeight: 44,
+      minHeight: 36,
     },
     singleButton: {
-      marginTop: 6,
+      marginTop: 8,
+      marginBottom: 6,
+      alignSelf: "center",
+      minWidth: 140,
+      flexGrow: 0,
+      flexBasis: "auto",
+      paddingHorizontal: 20,
     },
     buttonText: {
       color: colors.onAccent,
       fontWeight: "800",
-      fontSize: 16,
+      fontSize: 13,
       textAlign: "center",
       includeFontPadding: false,
       textAlignVertical: "center",
@@ -136,7 +171,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     cancelButtonText: {
       color: colors.text,
-      fontWeight: "700",
-      fontSize: 15,
+      fontWeight: "800",
+      fontSize: 13,
     },
   });

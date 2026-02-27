@@ -106,6 +106,7 @@ export default function HomeScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors, mode), [colors, mode]);
   const screenWidth = Dimensions.get("window").width;
   const monthPagerRef = useRef<FlatList<AylikAnaliz>>(null);
+  const lastCategorySummaryKeyRef = useRef<string | null>(null);
   // =========================
   // ? STATE
   // =========================
@@ -137,6 +138,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [marketSource, setMarketSource] = useState<string | null>(null);
   const [categorySummary, setCategorySummary] = useState<CategorySummaryItem[]>([]);
   const [loadingCategorySummary, setLoadingCategorySummary] = useState(true);
+  const [suggestionCategorySummary, setSuggestionCategorySummary] = useState<CategorySummaryItem[]>([]);
   const graphGroupBy: GraphGroupBy = "HESAP";
   const [graphData, setGraphData] = useState<YatirimGraphResponse | null>(null);
   const [graphLoading, setGraphLoading] = useState(true);
@@ -268,6 +270,9 @@ export default function HomeScreen({ navigation }: Props) {
   // =========================
   const totalIncome = analiz?.aylikGelir ?? 0;
   const totalExpense = analiz?.aylikGider ?? 0;
+  const suggestionAnaliz = useMemo(() => pickCurrentOrLatest(son6Ay), [son6Ay]);
+  const suggestionIncome = suggestionAnaliz?.aylikGelir ?? 0;
+  const suggestionExpense = suggestionAnaliz?.aylikGider ?? 0;
 
 
   const total = totalIncome + totalExpense;
@@ -291,6 +296,16 @@ export default function HomeScreen({ navigation }: Props) {
       .filter((x) => x.tip === "GIDER")
       .sort((a, b) => Number(b.toplamTutar) - Number(a.toplamTutar));
   }, [categorySummary]);
+  const suggestionCategoryExpenseTotal = useMemo(() => {
+    return (suggestionCategorySummary || [])
+      .filter((x) => x.tip === "GIDER")
+      .reduce((sum, x) => sum + (Number(x.toplamTutar) || 0), 0);
+  }, [suggestionCategorySummary]);
+  const suggestionGiderItems = useMemo(() => {
+    return (suggestionCategorySummary || [])
+      .filter((x) => x.tip === "GIDER")
+      .sort((a, b) => Number(b.toplamTutar) - Number(a.toplamTutar));
+  }, [suggestionCategorySummary]);
   const expensePalette = useMemo(
     () =>
       mode === "light"
@@ -398,8 +413,8 @@ export default function HomeScreen({ navigation }: Props) {
       return arr[idx];
     };
 
-    const safeIncome = Number(totalIncome) || 0;
-    const safeExpense = Number(totalExpense) || 0;
+    const safeIncome = Number(suggestionIncome) || 0;
+    const safeExpense = Number(suggestionExpense) || 0;
 
     if (safeIncome === 0 && safeExpense === 0) {
       pushUnique(
@@ -433,9 +448,9 @@ export default function HomeScreen({ navigation }: Props) {
       );
     }
 
-    if (giderItems.length > 0 && categoryExpenseTotal > 0) {
-      const top = giderItems[0];
-      const pct = Math.round((top.toplamTutar / categoryExpenseTotal) * 100);
+    if (suggestionGiderItems.length > 0 && suggestionCategoryExpenseTotal > 0) {
+      const top = suggestionGiderItems[0];
+      const pct = Math.round((top.toplamTutar / suggestionCategoryExpenseTotal) * 100);
       if (pct >= 35) {
         pushUnique(
           pick([
@@ -556,10 +571,10 @@ export default function HomeScreen({ navigation }: Props) {
 
     return list.slice(0, 5);
   }, [
-    totalIncome,
-    totalExpense,
-    giderItems,
-    categoryExpenseTotal,
+    suggestionIncome,
+    suggestionExpense,
+    suggestionGiderItems,
+    suggestionCategoryExpenseTotal,
     son6Ay,
     familyTopSpender,
     familyMonthly,
@@ -719,11 +734,11 @@ export default function HomeScreen({ navigation }: Props) {
   }
 }, [marketBaseUrl]);
   const fetchCategorySummaryMonthly = useCallback(async (yilAy?: string) => {
-  setLoadingCategorySummary(true);
-  try {
-    const key = yilAy || getCurrentYM();
-    const res = await api.get("/api/categorysummary/monthly", {
-      params: { yilAy: key },
+    setLoadingCategorySummary(true);
+    try {
+      const key = yilAy || getCurrentYM();
+      const res = await api.get("/api/categorysummary/monthly", {
+        params: { yilAy: key },
     });
     const arr = Array.isArray(res.data) ? res.data : [];
     const normalized: CategorySummaryItem[] = arr.map((x: any) => ({
@@ -732,14 +747,33 @@ export default function HomeScreen({ navigation }: Props) {
       tip: x.tip === "GELIR" ? "GELIR" : "GIDER",
       toplamTutar: Number(x.toplamTutar) || 0,
     }));
-    setCategorySummary(normalized);
-  } catch (err: any) {
-    console.log("Category summary hata:", err?.response?.data || err?.message);
-    setCategorySummary([]);
-  } finally {
-    setLoadingCategorySummary(false);
-  }
-}, []);
+      setCategorySummary(normalized);
+    } catch (err: any) {
+      console.log("Category summary hata:", err?.response?.data || err?.message);
+      setCategorySummary([]);
+    } finally {
+      setLoadingCategorySummary(false);
+    }
+  }, []);
+  const fetchSuggestionCategorySummary = useCallback(async () => {
+    try {
+      const key = getCurrentYM();
+      const res = await api.get("/api/categorysummary/monthly", {
+        params: { yilAy: key },
+      });
+      const arr = Array.isArray(res.data) ? res.data : [];
+      const normalized: CategorySummaryItem[] = arr.map((x: any) => ({
+        kategoriId: Number(x.kategoriId),
+        kategoriAd: String(x.kategoriAd ?? ""),
+        tip: x.tip === "GELIR" ? "GELIR" : "GIDER",
+        toplamTutar: Number(x.toplamTutar) || 0,
+      }));
+      setSuggestionCategorySummary(normalized);
+    } catch (err: any) {
+      console.log("Suggestion category summary hata:", err?.response?.data || err?.message);
+      setSuggestionCategorySummary([]);
+    }
+  }, []);
   const fetchYatirimGraph = useCallback(async (groupBy: GraphGroupBy) => {
   setGraphLoading(true);
   setGraphError(null);
@@ -886,6 +920,7 @@ export default function HomeScreen({ navigation }: Props) {
     fetchSon6Ay();
     fetchUserInfo();
     fetchMarket();
+    fetchSuggestionCategorySummary();
     fetchYatirimGraph("HESAP");
     fetchMyYatirimlar();
     fetchPaymentReminders();
@@ -894,12 +929,16 @@ export default function HomeScreen({ navigation }: Props) {
     fetchSon6Ay,
     fetchUserInfo,
     fetchMarket,
+    fetchSuggestionCategorySummary,
     fetchYatirimGraph,
     fetchMyYatirimlar,
     fetchPaymentReminders,
   ]);
   useEffect(() => {
-    fetchCategorySummaryMonthly(selectedMonthKey || getCurrentYM());
+    const key = selectedMonthKey || getCurrentYM();
+    if (lastCategorySummaryKeyRef.current === key) return;
+    lastCategorySummaryKeyRef.current = key;
+    fetchCategorySummaryMonthly(key);
   }, [fetchCategorySummaryMonthly, selectedMonthKey]);
   useEffect(() => {
     fetchFamilyTopSpender();
@@ -909,18 +948,19 @@ export default function HomeScreen({ navigation }: Props) {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([
-        fetchAccounts(),
-        fetchSon6Ay(),
-        fetchUserInfo(),
-        fetchMarket(),
-        fetchCategorySummaryMonthly(selectedMonthKey || getCurrentYM()),
-        fetchYatirimGraph("HESAP"),
-        fetchMyYatirimlar(),
-        fetchPaymentReminders(),
-        fetchFamilyTopSpender(),
-        fetchFamilyMonthly(),
-      ]);
+        await Promise.all([
+          fetchAccounts(),
+          fetchSon6Ay(),
+          fetchUserInfo(),
+          fetchMarket(),
+          fetchCategorySummaryMonthly(selectedMonthKey || getCurrentYM()),
+          fetchSuggestionCategorySummary(),
+          fetchYatirimGraph("HESAP"),
+          fetchMyYatirimlar(),
+          fetchPaymentReminders(),
+          fetchFamilyTopSpender(),
+          fetchFamilyMonthly(),
+        ]);
     } finally {
       setRefreshing(false);
     }

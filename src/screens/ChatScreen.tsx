@@ -119,11 +119,13 @@ export default function ChatScreen({ navigation }: Props) {
       const payload: MarketLatestResponse = res.data;
       if (payload?.ok && payload?.data) {
         setMarketData(payload.data);
+        return payload.data;
       } else {
         throw new Error("Market verisi alınamadı");
       }
     } catch (err: any) {
       setMarketError(err?.message || "Market isteği başarısız");
+      return null;
     } finally {
       setMarketLoading(false);
     }
@@ -251,24 +253,45 @@ export default function ChatScreen({ navigation }: Props) {
   }, [normalizeText]);
   const inferPredictSymbol = useCallback((text: string) => {
     const t = normalizeText(text);
-    if (t.includes("dolar") || t.includes("usd")) return "USDTRY";
-    if (t.includes("euro") || t.includes("eur")) return "EURTRY";
-    if (t.includes("sterlin") || t.includes("gbp")) return "GBPTRY";
-    if (t.includes("altın") || t.includes("gram")) return "XAUUSD";
+    if (t.includes("xagusd") || t.includes("xag")) return "XAGUSD";
+    if (t.includes("xauusd") || t.includes("xau") || t.includes("altın") || t.includes("gram"))
+      return "XAUUSD";
     if (t.includes("bitcoin") || t.includes("btc")) return "BTCUSD";
     if (t.includes("ethereum") || t.includes("eth")) return "ETHUSD";
+    if (t.includes("euro") || t.includes("eur")) return "EURTRY";
+    if (t.includes("sterlin") || t.includes("gbp")) return "GBPTRY";
+    if (t.includes("usd") || t.includes("dolar")) return "USDTRY";
     return null;
   }, [normalizeText]);
-  const getRate = useCallback(
-    (keys: string[]) => {
-      if (!marketData) return undefined;
-      for (const k of keys) {
-        const val = marketData[k]?.value;
-        if (Number.isFinite(val)) return val;
+  const getRateFrom = useCallback((data: MarketLatestResponse["data"] | null, keys: string[]) => {
+    if (!data) return undefined;
+    const coerceNumber = (v: any) => {
+      if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+      if (typeof v === "string") {
+        const n = Number(v.replace(",", "."));
+        return Number.isFinite(n) ? n : undefined;
       }
       return undefined;
+    };
+    for (const k of keys) {
+      const entry: any = (data as any)[k];
+      const raw = entry && typeof entry === "object" && "value" in entry ? entry.value : entry;
+      const val = coerceNumber(raw);
+      if (Number.isFinite(val)) return val;
+    }
+    return undefined;
+  }, []);
+  const getSymbolRateFrom = useCallback(
+    (data: MarketLatestResponse["data"] | null, symbol: string | null) => {
+      if (!symbol) return undefined;
+      const normalized = symbol.toUpperCase();
+      return getRateFrom(data, [
+        normalized,
+        normalized.replace(/([A-Z]{3})([A-Z]{3})/, "$1/$2"),
+        normalized.replace(/([A-Z]{3})([A-Z]{3})/, "$1_$2"),
+      ]);
     },
-    [marketData]
+    [getRateFrom]
   );
   const normalizeSymbol = (label: string) => label.split(" ")[0].trim();
   const buildPrompt = (symbol: string) => `${symbol} hakkında bilgi almak istiyorum.`;
@@ -314,13 +337,56 @@ export default function ChatScreen({ navigation }: Props) {
     key: string
   ) => list.find((x) => String(x.yilAy).slice(0, 7) === key) ?? null;
 
+  const pushUserMessage = useCallback(
+    (text: string) => {
+      setMessages((prev) => [
+        ...prev,
+        { id: `${Date.now()}-u`, role: "user", text, time: nowTime() },
+      ]);
+    },
+    [nowTime]
+  );
+  const replyWithText = useCallback(
+    (reply: string) => {
+      setMessages((prev) => [
+        ...prev,
+        { id: `${Date.now()}-a`, role: "assistant", text: reply, time: nowTime() },
+      ]);
+    },
+    [nowTime]
+  );
+  const sendPredictForSymbol = useCallback(
+    async (symbol: string, userText?: string) => {
+      if (userText) {
+        pushUserMessage(userText);
+      }
+      const data = await fetchFxData();
+      if (data && data.length > 0) {
+        const filtered = data.filter((x) => x.symbol === symbol);
+        if (filtered.length > 0) {
+          const lines = filtered
+            .slice(0, 3)
+            .map(
+              (x) =>
+                `${x.symbol} (${x.date}) | Risk: ${x.risk} | H1 ${format6(
+                  x.forecast?.h1
+                )} · H3 ${format6(x.forecast?.h3)} · H7 ${format6(x.forecast?.h7)}`
+            )
+            .join("\n");
+          const insight = filtered[0]?.insight ? `\n\n${filtered[0].insight}` : "";
+          replyWithText(`${lines}${insight}`);
+          return;
+        }
+      }
+      replyWithText("Tahmin verisi bulunamadı. Biraz sonra tekrar dener misin?");
+    },
+    [fetchFxData, pushUserMessage, replyWithText]
+  );
+
   const sendMessage = useCallback(async () => {
     const text = inputText.trim();
     if (!text) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: `${Date.now()}-u`, role: "user", text, time: nowTime() },
-    ]);
+    pushUserMessage(text);
     setInputText("");
     const lowered = text.toLowerCase();
     const hasAny = (patterns: string[]) => patterns.some((p) => lowered.includes(p));
@@ -329,13 +395,6 @@ export default function ChatScreen({ navigation }: Props) {
     const getAnalizFor = async (key: string) => {
       const analizList = await fetchMonthlyAnaliz();
       return pickByYM(analizList, key);
-    };
-
-    const replyWithText = (reply: string) => {
-      setMessages((prev) => [
-        ...prev,
-        { id: `${Date.now()}-a`, role: "assistant", text: reply, time: nowTime() },
-      ]);
     };
 
     if (intent === "LAST_MONTH_SPEND_EXPLAIN" || lowered.includes("geçen ay harcama")) {
@@ -402,10 +461,12 @@ export default function ChatScreen({ navigation }: Props) {
       intent === "MARKET_RATES" &&
       hasAny(["anlık", "canlı", "güncel", "şu an", "spot", "anlık kur", "güncel kur"])
     ) {
-      const usd = getRate(["USDTRY", "USD/TRY", "USD_TRY"]);
-      const eur = getRate(["EURTRY", "EUR/TRY", "EUR_TRY"]);
-      const gbp = getRate(["GBPTRY", "GBP/TRY", "GBP_TRY"]);
-      const gold = getRate(["GRAM_ALTIN_TRY", "GRAM_ALTIN", "GRAM/TRY", "XAU_TRY", "XAUTRY"]);
+      const latest = await fetchMarketLatest();
+      const data = latest ?? marketData;
+      const usd = getRateFrom(data, ["USDTRY", "USD/TRY", "USD_TRY"]);
+      const eur = getRateFrom(data, ["EURTRY", "EUR/TRY", "EUR_TRY"]);
+      const gbp = getRateFrom(data, ["GBPTRY", "GBP/TRY", "GBP_TRY"]);
+      const gold = getRateFrom(data, ["GRAM_ALTIN_TRY", "GRAM_ALTIN", "GRAM/TRY", "XAU_TRY", "XAUTRY"]);
 
       const lines: string[] = [];
       if (hasAny(["dolar", "usd"]) && Number.isFinite(usd)) {
@@ -557,9 +618,14 @@ export default function ChatScreen({ navigation }: Props) {
       return replyWithText(`Toplam K/Z: ${formatTRY(sumKz)} TL.${detail}`);
     }
 
+    const inferred = inferPredictSymbol(text);
+    const predictSymbol = inferred ?? selectedSymbol;
+    if (predictSymbol) {
+      return sendPredictForSymbol(predictSymbol);
+    }
+
     const data = await fetchFxData();
     if (data && data.length > 0) {
-      const inferred = inferPredictSymbol(text);
       const filterSymbol = inferred ?? selectedSymbol;
       const filtered = filterSymbol ? data.filter((x) => x.symbol === filterSymbol) : data;
       if (filtered.length > 0) {
@@ -573,23 +639,26 @@ export default function ChatScreen({ navigation }: Props) {
           )
           .join("\n");
         const insight = filtered[0]?.insight ? `\n\n${filtered[0].insight}` : "";
-        setMessages((prev) => [
-          ...prev,
-          { id: `${Date.now()}-a`, role: "assistant", text: `${lines}${insight}`, time: nowTime() },
-        ]);
+        replyWithText(`${lines}${insight}`);
       }
     }
   }, [
     inputText,
+    pushUserMessage,
+    replyWithText,
+    sendPredictForSymbol,
     fetchFxData,
     fetchMarketLatest,
     selectedSymbol,
     fetchMonthlySummary,
     fetchMonthlyAnaliz,
-    getRate,
+    getRateFrom,
     detectIntent,
     normalizeText,
     inferPredictSymbol,
+    getSymbolRateFrom,
+    marketData,
+    sendPredictForSymbol,
   ]);
 
   return (
@@ -702,6 +771,11 @@ export default function ChatScreen({ navigation }: Props) {
                     }
                     const symbol = normalizeSymbol(label);
                     setSelectedSymbol(symbol);
+                    if (selectedGroup === "market") {
+                      setInputText("");
+                      sendPredictForSymbol(symbol, buildPrompt(symbol));
+                      return;
+                    }
                     setInputText(buildPrompt(symbol));
                   }}
                 >

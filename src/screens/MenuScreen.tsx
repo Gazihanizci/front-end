@@ -31,6 +31,7 @@ export default function MenuScreen({ navigation }: Props) {
   const { colors, mode, setMode } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [logoutVisible, setLogoutVisible] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
 
   const handleLogout = () => {
     setLogoutVisible(true);
@@ -108,9 +109,21 @@ export default function MenuScreen({ navigation }: Props) {
     }
   }, []);
 
+  const fetchNotifCount = useCallback(async () => {
+    try {
+      const res = await api.get("/api/ailecuzdani/izin/inbox");
+      const arr = Array.isArray(res.data) ? res.data : [];
+      setNotifCount(arr.length);
+    } catch (err) {
+      console.log("Menu bildirim sayısı hata:", err);
+      setNotifCount(0);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUserInfo();
-  }, [fetchUserInfo]);
+    fetchNotifCount();
+  }, [fetchUserInfo, fetchNotifCount]);
 
   return (
     <View style={styles.container}>
@@ -225,6 +238,11 @@ export default function MenuScreen({ navigation }: Props) {
           <View style={{ flex: 1 }}>
             <Text style={styles.menuText}>Bildirimler</Text>
           </View>
+          {notifCount > 0 ? (
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>{notifCount}</Text>
+            </View>
+          ) : null}
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
@@ -298,6 +316,7 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
+      position: "relative",
     },
 
     iconBox: {
@@ -314,6 +333,26 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.text,
       fontSize: 16,
       fontWeight: "700",
+    },
+    notifBadge: {
+      position: "absolute",
+      top: -6,
+      right: -6,
+      minWidth: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 6,
+      backgroundColor: colors.danger,
+      borderWidth: 1,
+      borderColor: colors.surface,
+      zIndex: 2,
+    },
+    notifBadgeText: {
+      color: colors.onAccent,
+      fontSize: 11,
+      fontWeight: "900",
     },
 
     divider: {

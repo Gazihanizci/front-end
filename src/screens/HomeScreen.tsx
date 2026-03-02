@@ -597,17 +597,26 @@ export default function HomeScreen({ navigation }: Props) {
     const currentKey = getCurrentYM();
     const latest = availableMonths[availableMonths.length - 1];
     const preferred = availableMonths.includes(currentKey) ? currentKey : latest;
-    if (!selectedMonthKey || !availableMonths.includes(selectedMonthKey)) {
+    if (selectedMonthKey !== preferred) {
       setSelectedMonthKey(preferred);
     }
   }, [son6Ay, availableMonths, selectedMonthKey]);
 
   const monthViewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+  const selectedMonthKeyRef = useRef<string | null>(null);
+  const didInitScrollRef = useRef(false);
+  useEffect(() => {
+    selectedMonthKeyRef.current = selectedMonthKey;
+  }, [selectedMonthKey]);
   const onMonthViewable = useRef(
     ({ viewableItems }: { viewableItems: Array<{ item: AylikAnaliz }> }) => {
+      if (!didInitScrollRef.current) return;
       const first = viewableItems[0]?.item;
       if (first) {
-        setSelectedMonthKey(getMonthKey(first.yilAy));
+        const nextKey = getMonthKey(first.yilAy);
+        if (selectedMonthKeyRef.current !== nextKey) {
+          setSelectedMonthKey(nextKey);
+        }
       }
     }
   ).current;
@@ -617,6 +626,7 @@ export default function HomeScreen({ navigation }: Props) {
     const idx = availableMonths.indexOf(selectedMonthKey);
     if (idx >= 0) {
       monthPagerRef.current?.scrollToIndex({ index: idx, animated: false });
+      didInitScrollRef.current = true;
     }
   }, [selectedMonthKey, availableMonths]);
 

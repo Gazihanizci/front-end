@@ -241,7 +241,7 @@ export default function MenuScreen({ navigation }: Props) {
             <Ionicons name="notifications-outline" size={22} color={colors.text} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.menuText}>Bildirimler</Text>
+            <Text style={styles.menuText}>İzinler</Text>
           </View>
           {notifCount > 0 ? (
             <View style={styles.notifBadge}>

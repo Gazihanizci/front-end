@@ -40,11 +40,13 @@ api.interceptors.response.use(
       url.includes("/api/aileler/katil") ||
       url.includes("/api/ozelislemler") ||
       url.includes("/api/market") ||
+      url.includes("/api/ailecuzdani/izin/inbox") ||
+      url.includes("/api/ailecuzdani/izin/") ||
       url.includes(":8090/");
     if (status === 401) {
       console.log("401 intercepted:", { url, skipLogout, data: error?.response?.data });
     }
-    if ((status === 401 || status === 403) && !skipLogout) {
+    if (status === 401 && !skipLogout) {
       await clearTokens();
       await clearProfile();
       resetToLogin();

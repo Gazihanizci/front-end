@@ -26,8 +26,13 @@ export default function BildirimlerScreen({ navigation }: Props) {
       const arr = Array.isArray(res.data) ? res.data : [];
       setItems(arr);
     } catch (err: any) {
+      const status = err?.response?.status;
       console.log("Bildirim inbox hata:", err?.response?.data || err?.message);
-      setError("Bildirimler yüklenemedi.");
+      if (status === 401 || status === 403) {
+        setError("Herhangi bir bildirim bulunamadı.");
+      } else {
+        setError("Bildirimler yüklenemedi.");
+      }
       setItems([]);
     } finally {
       setLoading(false);
@@ -84,8 +89,8 @@ export default function BildirimlerScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="Bildirimler"
-        subtitle="Güncel bildirimler"
+        title="İzin Talepleri"
+        subtitle="Güncel taleper"
         left={
           <HeaderAction
             label="Geri"
@@ -102,7 +107,14 @@ export default function BildirimlerScreen({ navigation }: Props) {
       />
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>İzin Talepleri</Text>
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>İzin Talepleri</Text>
+          {!loading && !error && normalized.length > 0 ? (
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>{normalized.length}</Text>
+            </View>
+          ) : null}
+        </View>
 
         {loading ? (
           <View style={styles.center}>
@@ -135,7 +147,25 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     content: { padding: 16 },
-    sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginBottom: 10 },
+    sectionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 10,
+    },
+    sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+    countBadge: {
+      minWidth: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 6,
+      backgroundColor: colors.warning,
+      borderWidth: 1,
+      borderColor: colors.warning,
+    },
+    countBadgeText: { color: colors.onAccent, fontSize: 11, fontWeight: "900" },
     center: { alignItems: "center", paddingVertical: 16, gap: 8 },
     muted: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
     error: { color: colors.danger, fontSize: 12, fontWeight: "800" },

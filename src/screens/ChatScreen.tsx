@@ -463,29 +463,39 @@ export default function ChatScreen({ navigation }: Props) {
     ) {
       const latest = await fetchMarketLatest();
       const data = latest ?? marketData;
-      const usd = getRateFrom(data, ["USDTRY", "USD/TRY", "USD_TRY"]);
-      const eur = getRateFrom(data, ["EURTRY", "EUR/TRY", "EUR_TRY"]);
-      const gbp = getRateFrom(data, ["GBPTRY", "GBP/TRY", "GBP_TRY"]);
-      const gold = getRateFrom(data, ["GRAM_ALTIN_TRY", "GRAM_ALTIN", "GRAM/TRY", "XAU_TRY", "XAUTRY"]);
+      const rateItems = [
+        { key: "USD/TRY", labels: ["dolar", "usd"], keys: ["USDTRY", "USD/TRY", "USD_TRY"] },
+        { key: "EUR/TRY", labels: ["euro", "eur"], keys: ["EURTRY", "EUR/TRY", "EUR_TRY"] },
+        { key: "GBP/TRY", labels: ["sterlin", "gbp"], keys: ["GBPTRY", "GBP/TRY", "GBP_TRY"] },
+        { key: "JPY/TRY", labels: ["yen", "jpy", "japon"], keys: ["JPYTRY", "JPY/TRY", "JPY_TRY"] },
+        { key: "CHF/TRY", labels: ["frank", "chf", "isviçre", "isvicre"], keys: ["CHFTRY", "CHF/TRY", "CHF_TRY"] },
+        { key: "CAD/TRY", labels: ["kanada", "cad"], keys: ["CADTRY", "CAD/TRY", "CAD_TRY"] },
+        { key: "AUD/TRY", labels: ["avustralya", "aud"], keys: ["AUDTRY", "AUD/TRY", "AUD_TRY"] },
+        { key: "NZD/TRY", labels: ["yeni zelanda", "nzd"], keys: ["NZDTRY", "NZD/TRY", "NZD_TRY"] },
+        { key: "SEK/TRY", labels: ["isvec", "isveç", "sek"], keys: ["SEKTRY", "SEK/TRY", "SEK_TRY"] },
+        { key: "NOK/TRY", labels: ["norvec", "norveç", "nok"], keys: ["NOKTRY", "NOK/TRY", "NOK_TRY"] },
+        { key: "DKK/TRY", labels: ["danimarka", "dkk"], keys: ["DKKTRY", "DKK/TRY", "DKK_TRY"] },
+        { key: "PLN/TRY", labels: ["polonya", "pln", "zloti", "zloty"], keys: ["PLNTRY", "PLN/TRY", "PLN_TRY"] },
+        {
+          key: "Gram Altın",
+          labels: ["altın", "gram"],
+          keys: ["GRAM_ALTIN_TRY", "GRAM_ALTIN", "GRAM/TRY", "XAU_TRY", "XAUTRY"],
+        },
+      ];
 
-      const lines: string[] = [];
-      if (hasAny(["dolar", "usd"]) && Number.isFinite(usd)) {
-        lines.push(`USD/TRY: ₺ ${formatTRY(usd as number)}`);
-      }
-      if (hasAny(["euro", "eur"]) && Number.isFinite(eur)) {
-        lines.push(`EUR/TRY: ₺ ${formatTRY(eur as number)}`);
-      }
-      if (hasAny(["sterlin", "gbp"]) && Number.isFinite(gbp)) {
-        lines.push(`GBP/TRY: ₺ ${formatTRY(gbp as number)}`);
-      }
-      if (hasAny(["altın", "gram"]) && Number.isFinite(gold)) {
-        lines.push(`Gram Altın: ₺ ${formatTRY(gold as number)}`);
-      }
+      const wantsSpecific = rateItems.some((r) => r.labels.some((l) => lowered.includes(l)));
+      const list = rateItems
+        .filter((r) => (wantsSpecific ? r.labels.some((l) => lowered.includes(l)) : true))
+        .map((r) => {
+          const val = getRateFrom(data, r.keys);
+          return Number.isFinite(val) ? `${r.key}: ₺ ${formatTRY(val as number)}` : null;
+        })
+        .filter(Boolean) as string[];
 
-      if (lines.length === 0) {
+      if (list.length === 0) {
         return replyWithText("Kur verileri şu an alınamadı. Biraz sonra tekrar dener misin?");
       }
-      return replyWithText(lines.join("\n"));
+      return replyWithText(list.join("\n"));
     }
 
     if (intent === "MONTHLY_INCOME_CURRENT" || hasAny(["bu ay toplam gelir", "bu ayki gelir"])) {

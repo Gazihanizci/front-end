@@ -21,6 +21,7 @@ import YatirimAzaltScreen from "./src/screens/YatirimAzaltScreen";
 import FamilyPermissionInboxScreen from "./src/screens/FamilyPermissionInboxScreen";
 import NotesListScreen from "./src/screens/NotesListScreen";
 import ChatScreen from "./src/screens/ChatScreen";
+import KurlarScreen from "./src/screens/KurlarScreen";
 import { getAccessToken, onAuthTokenChanged } from "./src/utils/authStorage";
 import { navigationRef } from "./src/navigation/navigationRef";
 import { ThemeProvider } from "./src/theme/theme";
@@ -43,6 +44,7 @@ export type RootStackParamList = {
   FamilyPermissionInbox: undefined;
   Notlar: undefined;
   Chat: undefined;
+  Kurlar: undefined;
   YatirimAzalt: { yatirimId: number; hesapAdi: string; varlikTuru: "USD" | "EUR" | "ALTIN" | "TL" };
 };
 
@@ -107,6 +109,7 @@ export default function App() {
               <Stack.Screen name="FamilyPermissionInbox" component={FamilyPermissionInboxScreen} />
               <Stack.Screen name="Notlar" component={NotesListScreen} />
               <Stack.Screen name="Chat" component={ChatScreen} />
+              <Stack.Screen name="Kurlar" component={KurlarScreen} />
               <Stack.Screen name="YatirimAzalt" component={YatirimAzaltScreen} />
             </>
           )}

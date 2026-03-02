@@ -85,6 +85,11 @@ export default function MenuScreen({ navigation }: Props) {
       icon: <Ionicons name="pie-chart-outline" size={22} color={colors.accent} />,
       onPress: () => navigation.navigate("Raporlar"),
     },
+    {
+      title: "Kurlar",
+      icon: <Ionicons name="pulse-outline" size={22} color={colors.accent} />,
+      onPress: () => navigation.navigate("Kurlar"),
+    },
    
     {
       title: "Notlar",
@@ -304,7 +309,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: 16,
       paddingTop: 14,
       paddingBottom: 28,
-    },
+    },  
 
     menuItem: {
       flexDirection: "row",

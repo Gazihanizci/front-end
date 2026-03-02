@@ -137,6 +137,8 @@ export default function KategorilerScreen({ navigation }: Props) {
     });
   }, [query, tab, customCategories]);
 
+  const displayTip = (tip: "GIDER" | "GELIR") => (tip === "GELIR" ? "GELİR" : "GİDER");
+
   const parseTrMoney = (s: string) => {
     const cleaned = s.trim().replace(/\./g, "").replace(",", ".");
     const n = Number(cleaned);
@@ -273,9 +275,9 @@ export default function KategorilerScreen({ navigation }: Props) {
               onPress={() => setTab(t)}
               activeOpacity={0.8}
             >
-              <Text style={[styles.tabText, active && styles.tabTextActive]}>
-                {t === "HEPSI" ? "Hepsi" : t}
-              </Text>
+                <Text style={[styles.tabText, active && styles.tabTextActive]}>
+                {t === "HEPSI" ? "Hepsi" : displayTip(t)}
+                </Text>
             </TouchableOpacity>
           );
         })}
@@ -313,7 +315,7 @@ export default function KategorilerScreen({ navigation }: Props) {
               </View>
               <View style={[styles.badge, isGider ? styles.badgeGider : styles.badgeGelir]}>
                 <Text style={[styles.badgeText, isGider ? styles.badgeTextGider : styles.badgeTextGelir]}>
-                  {k.tip}
+                  {displayTip(k.tip)}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -326,7 +328,7 @@ export default function KategorilerScreen({ navigation }: Props) {
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Tutar Gir</Text>
             <Text style={styles.sheetSubTitle}>
-              {selected ? `${selected.ad} (${selected.tip})` : "Kategori"}
+              {selected ? `${selected.ad} (${displayTip(selected.tip)})` : "Kategori"}
             </Text>
 
             <TextInput
@@ -377,7 +379,7 @@ export default function KategorilerScreen({ navigation }: Props) {
             <TextInput
               value={newName}
               onChangeText={setNewName}
-              placeholder="Kategori adı (örn: Evcil Hayvan)"
+              placeholder="Kategori adı"
               placeholderTextColor={colors.textMuted}
               style={styles.input}
             />
@@ -393,7 +395,7 @@ export default function KategorilerScreen({ navigation }: Props) {
                     activeOpacity={0.8}
                   >
                     <Text style={[styles.typeBtnText, active && styles.typeBtnTextActive]}>
-                      {t}
+                      {displayTip(t)}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -511,8 +513,16 @@ const createStyles = (colors: ThemeColors, mode: "dark" | "light") =>
       alignItems: "center",
       justifyContent: "center",
     },
-    iconBoxGider: { backgroundColor: colors.danger },
-    iconBoxGelir: { backgroundColor: colors.success },
+    iconBoxGider: {
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: 1,
+      borderColor: colors.danger,
+    },
+    iconBoxGelir: {
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: 1,
+      borderColor: colors.success,
+    },
     iconText: { fontSize: 18 },
     cardTitle: {
       color: colors.text,
@@ -526,11 +536,11 @@ const createStyles = (colors: ThemeColors, mode: "dark" | "light") =>
       borderWidth: 1,
     },
     badgeGider: {
-      backgroundColor: colors.danger,
+      backgroundColor: colors.surfaceAlt,
       borderColor: colors.danger,
     },
     badgeGelir: {
-      backgroundColor: colors.success,
+      backgroundColor: colors.surfaceAlt,
       borderColor: colors.success,
     },
     badgeText: {
@@ -538,8 +548,8 @@ const createStyles = (colors: ThemeColors, mode: "dark" | "light") =>
       fontWeight: "900",
       letterSpacing: 0.4,
     },
-    badgeTextGider: { color: colors.onAccent },
-    badgeTextGelir: { color: colors.onAccent },
+    badgeTextGider: { color: colors.danger },
+    badgeTextGelir: { color: colors.success },
     modalBackdrop: {
       flex: 1,
       backgroundColor: mode === "light" ? "rgba(15,23,42,0.35)" : "rgba(0,0,0,0.55)",

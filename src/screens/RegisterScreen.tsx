@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   TouchableWithoutFeedback,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -46,6 +49,20 @@ export default function RegisterScreen({ navigation }: Props) {
   const [msgText, setMsgText] = useState("");
   const [msgType, setMsgType] = useState<MsgType>("info");
 
+  const passwordChecks = useMemo(() => {
+    const hasUpper = /[A-ZÇĞİÖŞÜ]/.test(parola);
+    const hasNumber = /\d/.test(parola);
+    const hasPunct = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(parola);
+    const hasMinLen = parola.length >= 6;
+    return {
+      hasUpper,
+      hasNumber,
+      hasPunct,
+      hasMinLen,
+      allOk: hasUpper && hasNumber && hasPunct && hasMinLen,
+    };
+  }, [parola]);
+
   const showMsg = (type: MsgType, text: string) => {
     setMsgType(type);
     setMsgText(text);
@@ -77,8 +94,11 @@ export default function RegisterScreen({ navigation }: Props) {
       showMsg("error", "Geçerli bir email girin.");
       return false;
     }
-    if (parola.length < 6) {
-      showMsg("error", "Şifre en az 6 karakter olmalı.");
+    if (!passwordChecks.allOk) {
+      showMsg(
+        "error",
+        "Şifre en az 6 karakter olmalı; büyük harf, sayı ve noktalama içermeli."
+      );
       return false;
     }
     return true;
@@ -172,69 +192,148 @@ export default function RegisterScreen({ navigation }: Props) {
         <View style={styles.bgCircleTwo} />
         <View style={styles.bgRing} />
 
-        <View style={styles.hero}>
-          <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeText}>Yeni Hesap</Text>
-          </View>
-          <Text style={styles.title}>Kayıt Ol</Text>
-          <Text style={styles.subtitle}>Hızlıca hesabını oluştur</Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Kişisel Bilgiler</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ad"
-            placeholderTextColor={colors.textMuted}
-            value={ad}
-            onChangeText={setAd}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Soyad"
-            placeholderTextColor={colors.textMuted}
-            value={soyad}
-            onChangeText={setSoyad}
-          />
-          <Text style={styles.sectionTitle}>İletişim</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Şifre (min 6)"
-            placeholderTextColor={colors.textMuted}
-            secureTextEntry
-            value={parola}
-            onChangeText={setParola}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Telefon (opsiyonel)"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="phone-pad"
-            value={telefon}
-            onChangeText={setTelefon}
-          />
-
-          <TouchableOpacity
-            style={[styles.button, loading && { opacity: 0.7 }]}
-            onPress={handleRegister}
-            disabled={loading}
+        <KeyboardAvoidingView
+          style={styles.keyboardWrap}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            {loading ? (
-              <ActivityIndicator color={colors.onAccent} />
-            ) : (
-              <Text style={styles.buttonText}>Hesap Oluştur</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+            <View style={styles.hero}>
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeText}>Yeni Hesap</Text>
+              </View>
+              <Text style={styles.title}>Kayıt Ol</Text>
+              <Text style={styles.subtitle}>Hızlıca hesabını oluştur</Text>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Kişisel Bilgiler</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ad"
+                placeholderTextColor={colors.textMuted}
+                value={ad}
+                onChangeText={setAd}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Soyad"
+                placeholderTextColor={colors.textMuted}
+                value={soyad}
+                onChangeText={setSoyad}
+              />
+              <Text style={styles.sectionTitle}>İletişim</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Şifre"
+                placeholderTextColor={colors.textMuted}
+                secureTextEntry
+                value={parola}
+                onChangeText={setParola}
+              />
+              <View style={styles.passwordRules}>
+                <Text style={styles.rulesTitle}>Şifre Kriterleri</Text>
+                <View style={styles.ruleRow}>
+                  <View
+                    style={[
+                      styles.ruleDot,
+                      passwordChecks.hasUpper && styles.ruleDotOk,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.ruleText,
+                      passwordChecks.hasUpper && styles.ruleTextOk,
+                    ]}
+                  >
+                    Büyük harf içerir
+                  </Text>
+                </View>
+                <View style={styles.ruleRow}>
+                  <View
+                    style={[
+                      styles.ruleDot,
+                      passwordChecks.hasNumber && styles.ruleDotOk,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.ruleText,
+                      passwordChecks.hasNumber && styles.ruleTextOk,
+                    ]}
+                  >
+                    Sayı içerir
+                  </Text>
+                </View>
+                <View style={styles.ruleRow}>
+                  <View
+                    style={[
+                      styles.ruleDot,
+                      passwordChecks.hasPunct && styles.ruleDotOk,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.ruleText,
+                      passwordChecks.hasPunct && styles.ruleTextOk,
+                    ]}
+                  >
+                    Noktalama içerir
+                  </Text>
+                </View>
+                <View style={styles.ruleRow}>
+                  <View
+                    style={[
+                      styles.ruleDot,
+                      passwordChecks.hasMinLen && styles.ruleDotOk,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.ruleText,
+                      passwordChecks.hasMinLen && styles.ruleTextOk,
+                    ]}
+                  >
+                    En az 6 karakter
+                  </Text>
+                </View>
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Telefon (opsiyonel)"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="phone-pad"
+                value={telefon}
+                onChangeText={setTelefon}
+              />
+
+              <TouchableOpacity
+                style={[styles.button, loading && { opacity: 0.7 }]}
+                onPress={handleRegister}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.onAccent} />
+                ) : (
+                  <Text style={styles.buttonText}>Hesap Oluştur</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
 
         <MessageBox
           visible={msgVisible}
@@ -253,9 +352,16 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: {
       flex: 1,
+      backgroundColor: colors.background,
+    },
+    keyboardWrap: {
+      flex: 1,
+    },
+    scrollContent: {
+      flexGrow: 1,
       justifyContent: "center",
       padding: 24,
-      backgroundColor: colors.background,
+      paddingBottom: 36,
     },
     backBtn: {
       position: "absolute",
@@ -358,6 +464,49 @@ const createStyles = (colors: ThemeColors) =>
       marginBottom: 12,
       borderWidth: 1,
       borderColor: colors.border,
+    },
+    passwordRules: {
+      marginBottom: 12,
+      padding: 12,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    rulesTitle: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0.6,
+      marginBottom: 8,
+    },
+    ruleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 6,
+    },
+    ruleDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 999,
+      backgroundColor: colors.borderStrong,
+    },
+    ruleDotOk: {
+      backgroundColor: colors.success,
+      shadowColor: colors.success,
+      shadowOpacity: 0.7,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 3,
+    },
+    ruleText: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    ruleTextOk: {
+      color: colors.success,
     },
     button: {
       backgroundColor: colors.warning,

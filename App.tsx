@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -25,6 +26,7 @@ import KurlarScreen from "./src/screens/KurlarScreen";
 import { getAccessToken, onAuthTokenChanged } from "./src/utils/authStorage";
 import { navigationRef } from "./src/navigation/navigationRef";
 import { ThemeProvider } from "./src/theme/theme";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -77,16 +79,18 @@ export default function App() {
 
   if (checking) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <SafeAreaView style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ThemeProvider>
-      <NavigationContainer ref={navigationRef}>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <SafeAreaView style={{ flex: 1 }}>
+          <NavigationContainer ref={navigationRef}>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
           {!isAuthed ? (
             <>
               <Stack.Screen name="Login" component={LoginScreen} />
@@ -113,8 +117,10 @@ export default function App() {
               <Stack.Screen name="YatirimAzalt" component={YatirimAzaltScreen} />
             </>
           )}
-        </Stack.Navigator>
-      </NavigationContainer>
-    </ThemeProvider>
+            </Stack.Navigator>
+          </NavigationContainer>
+        </SafeAreaView>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

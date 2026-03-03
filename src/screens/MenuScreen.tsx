@@ -41,6 +41,11 @@ export default function MenuScreen({ navigation }: Props) {
     setLogoutVisible(false);
     await clearTokens();
     await clearProfile();
+    try {
+      navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+    } catch {
+      // ignore if Login isn't in the current navigator
+    }
     resetToLogin();
   };
 

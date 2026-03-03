@@ -2595,4 +2595,3 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
 
 
 
-

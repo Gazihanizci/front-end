@@ -13,9 +13,12 @@ import {
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import api, { BASE_URL } from "../config/api";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import { ThemeColors, useTheme } from "../theme/theme";
+import { RootStackParamList } from "../../App";
 
 type PortfolioItem = {
   portfoyId: number;
@@ -83,6 +86,7 @@ type ModalMode = {
 };
 
 export default function HesaplarScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -323,7 +327,17 @@ export default function HesaplarScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScreenHeader title="Hesaplarım" subtitle="Portföy Özeti" />
+      <ScreenHeader
+        title="Hesaplarım"
+        subtitle="Portföy Özeti"
+        left={
+          <HeaderAction
+            label="Geri"
+            icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))}
+          />
+        }
+      />
 
       {loading ? (
         <View style={styles.center}>

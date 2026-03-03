@@ -68,6 +68,27 @@ type YatirimGraphResponse = {
   toplamKarZarar: string;
   points: YatirimGraphPointDto[];
 };
+type PortfolioGraphPoint = {
+  label: string;
+  toplamMaliyet: number;
+  guncelDeger: number;
+  karZarar: number;
+  unrealizedKar: number;
+  realizedKar: number;
+  toplamAdet: number;
+  ortalamaMaliyet: number;
+};
+type PortfolioItem = {
+  portfoyId: number;
+  kullaniciId: number;
+  varlikTuru: string;
+  toplamAdet: number;
+  ortalamaMaliyet: number;
+  toplamMaliyet: number;
+  realizedKar: number;
+  unrealizedKar: number;
+  guncelDeger: number;
+};
 type GraphGroupBy = "HESAP" | "VARLIK";
 type FamilyWalletResponse = {
   aileId: number;
@@ -146,6 +167,9 @@ export default function HomeScreen({ navigation }: Props) {
   const [graphShowAll, setGraphShowAll] = useState(false);
   const [yatirimlar, setYatirimlar] = useState<YatirimCreateResponse[]>([]);
   const [yatirimLoading, setYatirimLoading] = useState(true);
+  const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
+  const [portfolioLoading, setPortfolioLoading] = useState(true);
+  const [portfolioError, setPortfolioError] = useState<string | null>(null);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [detailType, setDetailType] = useState<"reminders" | "suggestions">("reminders");
@@ -343,49 +367,32 @@ export default function HomeScreen({ navigation }: Props) {
     if (!marketTs) return null;
     return new Date(marketTs * 1000).toLocaleString("tr-TR");
   }, [marketTs]);
-  const mineGraph = useMemo<YatirimGraphResponse | null>(() => {
-    if (yatirimlar.length === 0) return null;
-    const agg = new Map<
-      string,
-      { toplamMaliyet: number; guncelDeger: number; karZarar: number }
-    >();
-    for (const y of yatirimlar) {
-      const key = y.hesapAdi;
-      const toplamMaliyet = Number(y.toplamMaliyet) || 0;
-      const guncelDeger = Number(y.guncelDeger) || 0;
-      const karZarar = Number(y.karZarar) || 0;
-      const prev = agg.get(key) ?? { toplamMaliyet: 0, guncelDeger: 0, karZarar: 0 };
-      agg.set(key, {
-        toplamMaliyet: prev.toplamMaliyet + toplamMaliyet,
-        guncelDeger: prev.guncelDeger + guncelDeger,
-        karZarar: prev.karZarar + karZarar,
-      });
-    }
-    const points: YatirimGraphPointDto[] = Array.from(agg.entries()).map(([label, v]) => ({
-      label,
-      toplamMaliyet: String(v.toplamMaliyet),
-      guncelDeger: String(v.guncelDeger),
-      karZarar: String(v.karZarar),
-    }));
-    const toplamMaliyet = points.reduce((s, p) => s + toNum(p.toplamMaliyet), 0);
-    const toplamGuncelDeger = points.reduce((s, p) => s + toNum(p.guncelDeger), 0);
-    const toplamKarZarar = points.reduce((s, p) => s + toNum(p.karZarar), 0);
-    return {
-      toplamMaliyet: String(toplamMaliyet),
-      toplamGuncelDeger: String(toplamGuncelDeger),
-      toplamKarZarar: String(toplamKarZarar),
-      points,
-    };
-  }, [yatirimlar]);
+  const portfolioGraphPoints = useMemo<PortfolioGraphPoint[]>(
+    () =>
+      portfolioItems.map((p) => {
+        const unrealized = Number(p.unrealizedKar) || 0;
+        const realized = Number(p.realizedKar) || 0;
+        return {
+          label: String(p.varlikTuru ?? "VARLIK"),
+          toplamMaliyet: Number(p.toplamMaliyet) || 0,
+          guncelDeger: Number(p.guncelDeger) || 0,
+          karZarar: unrealized + realized,
+          unrealizedKar: unrealized,
+          realizedKar: realized,
+          toplamAdet: Number(p.toplamAdet) || 0,
+          ortalamaMaliyet: Number(p.ortalamaMaliyet) || 0,
+        };
+      }),
+    [portfolioItems]
+  );
 
-  const dataToShow = mineGraph ?? graphData;
-  const graphPoints = dataToShow?.points ?? [];
+  const graphPoints = portfolioGraphPoints;
   const graphVisiblePoints = graphShowAll ? graphPoints : graphPoints.slice(0, 10);
   const chartPoints = useMemo(
     () =>
       graphVisiblePoints.map((p) => ({
         label: p.label,
-        karZarar: p.karZarar,
+        karZarar: String(p.karZarar),
       })),
     [graphVisiblePoints]
   );
@@ -395,10 +402,15 @@ export default function HomeScreen({ navigation }: Props) {
     if (graphMax <= 0) return 0;
     return Math.min(1, Math.abs(v) / graphMax);
   };
-  const totalMaliyet = toNum(dataToShow?.toplamMaliyet);
-  const totalGuncel = toNum(dataToShow?.toplamGuncelDeger);
-  const totalKarZarar = toNum(dataToShow?.toplamKarZarar);
-  const karZararPositive = totalKarZarar >= 0;
+  const portfolioTotals = useMemo(() => {
+    const base = { unrealized: 0, realized: 0 };
+    if (!portfolioItems.length) return { ...base, total: 0 };
+    for (const p of portfolioItems) {
+      base.unrealized += Number(p.unrealizedKar) || 0;
+      base.realized += Number(p.realizedKar) || 0;
+    }
+    return { ...base, total: base.unrealized + base.realized };
+  }, [portfolioItems]);
   const suggestions = useMemo(() => {
     const list: string[] = [];
     const seen = new Set<string>();
@@ -597,7 +609,7 @@ export default function HomeScreen({ navigation }: Props) {
     const currentKey = getCurrentYM();
     const latest = availableMonths[availableMonths.length - 1];
     const preferred = availableMonths.includes(currentKey) ? currentKey : latest;
-    if (selectedMonthKey !== preferred) {
+    if (!selectedMonthKey || !availableMonths.includes(selectedMonthKey)) {
       setSelectedMonthKey(preferred);
     }
   }, [son6Ay, availableMonths, selectedMonthKey]);
@@ -810,6 +822,20 @@ export default function HomeScreen({ navigation }: Props) {
     setYatirimLoading(false);
   }
 }, []);
+  const fetchPortfolioMine = useCallback(async () => {
+  setPortfolioLoading(true);
+  setPortfolioError(null);
+  try {
+    const res = await api.get<PortfolioItem[]>("/api/portfoy/mine");
+    setPortfolioItems(Array.isArray(res.data) ? res.data : []);
+  } catch (err: any) {
+    console.log("portfoy/mine hata:", err?.response?.data || err?.message);
+    setPortfolioError("Portföy özeti yüklenemedi.");
+    setPortfolioItems([]);
+  } finally {
+    setPortfolioLoading(false);
+  }
+}, []);
   const fetchFamilyTopSpender = useCallback(async () => {
   if (!userInfo?.aileId) {
     setFamilyTopSpender(null);
@@ -933,6 +959,7 @@ export default function HomeScreen({ navigation }: Props) {
     fetchSuggestionCategorySummary();
     fetchYatirimGraph("HESAP");
     fetchMyYatirimlar();
+    fetchPortfolioMine();
     fetchPaymentReminders();
   }, [
     fetchAccounts,
@@ -942,6 +969,7 @@ export default function HomeScreen({ navigation }: Props) {
     fetchSuggestionCategorySummary,
     fetchYatirimGraph,
     fetchMyYatirimlar,
+    fetchPortfolioMine,
     fetchPaymentReminders,
   ]);
   useEffect(() => {
@@ -967,6 +995,7 @@ export default function HomeScreen({ navigation }: Props) {
           fetchSuggestionCategorySummary(),
           fetchYatirimGraph("HESAP"),
           fetchMyYatirimlar(),
+          fetchPortfolioMine(),
           fetchPaymentReminders(),
           fetchFamilyTopSpender(),
           fetchFamilyMonthly(),
@@ -982,6 +1011,7 @@ export default function HomeScreen({ navigation }: Props) {
     fetchCategorySummaryMonthly,
     fetchYatirimGraph,
     fetchMyYatirimlar,
+    fetchPortfolioMine,
     fetchPaymentReminders,
     fetchFamilyTopSpender,
     fetchFamilyMonthly,
@@ -1517,7 +1547,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
                 <View style={[styles.rateIcon, styles.rateIconGold]}>
                   <Text style={[styles.rateIconText, styles.rateIconTextGold]}>ALTIN</Text>
                 </View>
-                <Text style={styles.rateCode}>Gram Altin</Text>
+                <Text style={styles.rateCode}>Gram Altın</Text>
               </View>
               <Text style={styles.rateValue}>
                 {marketLoading
@@ -1538,29 +1568,74 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
 
         {/* YATIRIM GRAFIGI */}
         <View style={styles.card}>
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={styles.cardTitle}>Yatırım Grafiği</Text>
-              <Text style={styles.cardSubtitle}>Hesap bazlı kâr/zarar</Text>
-            </View>
-            <View style={styles.sectionBadge}>
-              <Text style={styles.sectionBadgeText}>{graphGroupBy}</Text>
+          <View style={styles.graphHero}>
+            <View style={styles.graphHeroGlowA} />
+            <View style={styles.graphHeroGlowB} />
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.cardTitle}>Yatırım Grafiği</Text>
+                <Text style={styles.cardSubtitle}>Portföy bazlı kâr/zarar</Text>
+              </View>
+              <View style={styles.sectionBadge}>
+                <Text style={styles.sectionBadgeText}>PORTFÖY</Text>
+              </View>
             </View>
           </View>
 
-          {graphLoading ? (
+          {portfolioLoading ? (
             <View style={styles.loadingInline}>
               <ActivityIndicator color={colors.warning} />
               <Text style={styles.loadingText}>Yükleniyor...</Text>
             </View>
-          ) : graphError ? (
-            <Text style={styles.errorText}>{graphError}</Text>
+          ) : portfolioError ? (
+            <Text style={styles.errorText}>{portfolioError}</Text>
           ) : (
             <>
+              <View style={styles.graphKpiRow}>
+                <View style={styles.graphKpiCard}>
+                  <View style={styles.kpiGlowMini} />
+                  <Text style={styles.graphKpiLabel}>Anlık K/Z</Text>
+                  <Text
+                    style={[
+                      styles.graphKpiValue,
+                      portfolioTotals.unrealized >= 0 ? styles.kzUp : styles.kzDown,
+                    ]}
+                  >
+                    TL {formatTRY(portfolioTotals.unrealized)}
+                  </Text>
+                </View>
+                <View style={styles.graphKpiCard}>
+                  <View style={styles.kpiGlowMini} />
+                  <Text style={styles.graphKpiLabel}>Gerçekleşen K/Z</Text>
+                  <Text
+                    style={[
+                      styles.graphKpiValue,
+                      portfolioTotals.realized >= 0 ? styles.kzUp : styles.kzDown,
+                    ]}
+                  >
+                    TL {formatTRY(portfolioTotals.realized)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.graphKpiWide}>
+                <View style={styles.kpiGlowWide} />
+                <Text style={styles.graphKpiLabel}>Genel K/Z</Text>
+                <Text
+                  style={[
+                    styles.graphKpiValue,
+                    portfolioTotals.total >= 0 ? styles.kzUp : styles.kzDown,
+                  ]}
+                >
+                  TL {formatTRY(portfolioTotals.total)}
+                </Text>
+              </View>
+
               <View style={styles.chartCard}>
+                <View style={styles.chartCardGlowA} />
+                <View style={styles.chartCardGlowB} />
                 <View style={styles.chartHeaderRow}>
                   <Text style={styles.chartTitle}>Kâr/Zarar Dağılımı</Text>
-                  <Text style={styles.chartHint}>En yüksek {chartPoints.length}</Text>
+                  <Text style={styles.chartHint}>Varlık {chartPoints.length}</Text>
                 </View>
                 {graphChartData.length === 0 ? (
                   <Text style={styles.chartEmpty}>Grafik verisi yok.</Text>
@@ -2288,22 +2363,70 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   cancelBtn: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
   cancelText: { color: colors.textMuted, fontWeight: "800" },
   errorText: { color: colors.danger, fontSize: 12, fontWeight: "800", marginTop: 8 },
-  graphKpiRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  graphKpiRow: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
+  graphHero: {
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    overflow: "hidden",
+  },
+  graphHeroGlowA: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 180,
+    backgroundColor: colors.headerGlowA,
+    top: -90,
+    right: -60,
+  },
+  graphHeroGlowB: {
+    position: "absolute",
+    width: 160,
+    height: 160,
+    borderRadius: 160,
+    backgroundColor: colors.headerGlowB,
+    bottom: -90,
+    left: -60,
+  },
   graphKpiCard: {
     flex: 1,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
+    overflow: "hidden",
+  },
+  kpiGlowMini: {
+    position: "absolute",
+    width: 120,
+    height: 120,
+    borderRadius: 120,
+    backgroundColor: colors.accentSoft,
+    top: -70,
+    right: -60,
+    opacity: 0.6,
   },
   graphKpiWide: {
     marginTop: 10,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
+    overflow: "hidden",
+  },
+  kpiGlowWide: {
+    position: "absolute",
+    width: 240,
+    height: 240,
+    borderRadius: 240,
+    backgroundColor: colors.headerGlowA,
+    top: -120,
+    left: -100,
+    opacity: 0.5,
   },
   graphKpiLabel: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
   graphKpiValue: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 6 },
@@ -2322,41 +2445,58 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   chartCard: {
     marginTop: 12,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
+    overflow: "hidden",
+  },
+  chartCardGlowA: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 220,
+    backgroundColor: colors.headerGlowB,
+    top: -140,
+    right: -100,
+    opacity: 0.45,
+  },
+  chartCardGlowB: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 220,
+    backgroundColor: colors.accentSoft,
+    bottom: -140,
+    left: -120,
+    opacity: 0.5,
   },
   chartHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   chartTitle: { color: colors.text, fontSize: 12, fontWeight: "900", marginBottom: 6 },
   chartHint: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
   chartEmpty: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
-  chartList: { gap: 10, marginTop: 6 },
-  chartRow: { gap: 6 },
-  chartRowTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  chartList: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  chartRow: { width: "48%", gap: 8, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  chartRowTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   chartRowLabel: { color: colors.text, fontSize: 12, fontWeight: "800", flex: 1, marginRight: 8 },
   chartRowValue: { fontSize: 12, fontWeight: "900" },
-  chartBarSplit: {
-    height: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-  },
+  chartBarSplit: { height: 12, flexDirection: "row", alignItems: "center", marginTop: 8 },
   chartBarSide: {
     flex: 1,
     height: 10,
     borderRadius: 999,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
     overflow: "hidden",
   },
   chartBarZero: {
     width: 2,
     height: 12,
     borderRadius: 2,
-    backgroundColor: colors.borderStrong,
+    backgroundColor: colors.warning,
     marginHorizontal: 6,
+    opacity: 0.8,
   },
   chartBarFillPos: { height: "100%", borderRadius: 999, backgroundColor: colors.success },
   chartBarFillNeg: { height: "100%", borderRadius: 999, backgroundColor: colors.danger },
@@ -2406,19 +2546,24 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   graphDetailCarousel: { marginTop: 8, paddingRight: 16, gap: 12 },
   graphDetailCard: {
     width: 260,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderStrong,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   graphDetailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   graphDetailTitle: { flex: 1, color: colors.text, fontSize: 13, fontWeight: "900" },
   graphMetricRow: { flexDirection: "row", gap: 8, marginTop: 10 },
   graphMetricPill: {
     flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 10,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderWidth: 1,
@@ -2429,4 +2574,25 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   kzUp: { color: colors.success },
   kzDown: { color: colors.danger },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

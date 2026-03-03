@@ -1,7 +1,10 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  ScrollView,
+  FlatList,
+  Modal,
+  Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -9,24 +12,31 @@ import {
   View,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import { useFocusEffect } from "@react-navigation/native";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../App";
+import { SafeAreaView } from "react-native-safe-area-context";
 import api, { BASE_URL } from "../config/api";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
-import MessageBox from "../components/MessageBox";
 import { ThemeColors, useTheme } from "../theme/theme";
-import {
-  changeYatirimAdet,
-  createYatirim,
-  YatirimCreateRequest,
-  YatirimCreateResponse,
-  YatirimVarlikTuru,
-  getMyYatirimlar,
-  increaseYatirim,
-} from "../services/yatirimService";
 
-type Props = NativeStackScreenProps<RootStackParamList, "Hesaplar">;
+type PortfolioItem = {
+  portfoyId: number;
+  kullaniciId: number;
+  varlikTuru: string;
+  toplamAdet: number;
+  ortalamaMaliyet: number;
+  toplamMaliyet: number;
+  realizedKar: number;
+  unrealizedKar: number;
+  guncelDeger: number;
+};
+
+type AssetType = "USD" | "EUR" | "ALTIN";
+
+type TransactionRequest = {
+  varlikTuru: AssetType;
+  tip: "ALIS" | "SATIS";
+  adet: number;
+  fiyat: number;
+};
 
 type MarketLatestResponse = {
   ok: boolean;
@@ -35,78 +45,64 @@ type MarketLatestResponse = {
   data: Record<string, { value: number }>;
 };
 
-const formatTRY = (n: number) =>
+const ASSETS: AssetType[] = ["USD", "EUR", "ALTIN"];
+
+const formatMoney = (n: number) =>
   (Number.isFinite(n) ? n : 0).toLocaleString("tr-TR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 
-const parseNumberTR = (s: string) => {
+const formatQty = (n: number) =>
+  (Number.isFinite(n) ? n : 0).toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  });
+
+const parseNumber = (s: string) => {
   const cleaned = s.trim().replace(/\./g, "").replace(",", ".");
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : NaN;
 };
 
-export default function HesaplarScreen({ navigation }: Props) {
+const fetchPortfolio = async () => {
+  const res = await api.get<PortfolioItem[]>("/api/portfoy/mine");
+  return res.data;
+};
+
+const createTransaction = async (payload: TransactionRequest) => {
+  const res = await api.post("/api/islem", payload);
+  return res.data;
+};
+
+type ModalMode = {
+  visible: boolean;
+  type: "ALIS" | "SATIS";
+  asset: AssetType;
+  assetLocked: boolean;
+};
+
+export default function HesaplarScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [userInfo, setUserInfo] = useState<{ aileId: number | null } | null>(null);
+  const [items, setItems] = useState<PortfolioItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [marketLoading, setMarketLoading] = useState(true);
   const [marketData, setMarketData] = useState<MarketLatestResponse["data"] | null>(null);
-  const [yatirimlar, setYatirimlar] = useState<YatirimCreateResponse[]>([]);
-  const [yatirimLoading, setYatirimLoading] = useState(true);
-  const [yatirimError, setYatirimError] = useState<string | null>(null);
-  const [actionVisible, setActionVisible] = useState(false);
-  const [actionType, setActionType] = useState<"ARTIR" | "AZALT">("AZALT");
-  const [actionAmount, setActionAmount] = useState("");
-  const [actionTarget, setActionTarget] = useState<YatirimCreateResponse | null>(null);
-  const [actionSaving, setActionSaving] = useState(false);
-  const [actionUseMarket, setActionUseMarket] = useState(true);
-  const [actionPriceText, setActionPriceText] = useState("");
-  const [renameVisible, setRenameVisible] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<YatirimCreateResponse | null>(null);
-  const [renameText, setRenameText] = useState("");
-  const [renameSaving, setRenameSaving] = useState(false);
 
-  const [hesapAdi, setHesapAdi] = useState("");
-  const [varlikTuru, setVarlikTuru] = useState<YatirimVarlikTuru>("USD");
-  const [adetText, setAdetText] = useState("");
-  const [ilkAlisText, setIlkAlisText] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const [msgVisible, setMsgVisible] = useState(false);
-  const [msgText, setMsgText] = useState("");
-  const [msgType, setMsgType] = useState<"success" | "error" | "info">("info");
-
-  const fetchUserInfo = useCallback(async () => {
-    try {
-      const res = await api.get("/api/userinfo");
-      setUserInfo({ aileId: res?.data?.aileId ?? null });
-    } catch (e: any) {
-      console.log("userinfo hata:", e?.response?.data || e?.message);
-      setUserInfo(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchUserInfo();
-  }, [fetchUserInfo]);
-
-  const fetchMyYatirimlar = useCallback(async () => {
-    setYatirimLoading(true);
-    setYatirimError(null);
-    try {
-      const list = await getMyYatirimlar();
-      setYatirimlar(list);
-    } catch (e: any) {
-      console.log("yatirim/mine hata:", e?.response?.data || e?.message);
-      setYatirimError("Yatırım hesapları yüklenemedi.");
-      setYatirimlar([]);
-    } finally {
-      setYatirimLoading(false);
-    }
-  }, []);
+  const [modal, setModal] = useState<ModalMode>({
+    visible: false,
+    type: "ALIS",
+    asset: "USD",
+    assetLocked: false,
+  });
+  const [quantityText, setQuantityText] = useState("");
+  const [priceText, setPriceText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [assetOpen, setAssetOpen] = useState(false);
 
   const marketBaseUrl = useMemo(() => {
     const raw = String(BASE_URL || "").trim();
@@ -119,6 +115,21 @@ export default function HesaplarScreen({ navigation }: Props) {
     return "http://127.0.0.1:8090";
   }, []);
 
+  const fetchMarket = useCallback(async () => {
+    setMarketLoading(true);
+    try {
+      const res = await api.get(`${marketBaseUrl}/api/market/latest`);
+      const payload: MarketLatestResponse = res.data;
+      if (payload?.ok && payload?.data) {
+        setMarketData(payload.data);
+      }
+    } catch (e: any) {
+      setMarketData(null);
+    } finally {
+      setMarketLoading(false);
+    }
+  }, [marketBaseUrl]);
+
   const getRate = useCallback(
     (keys: string[]) => {
       if (!marketData) return undefined;
@@ -130,9 +141,10 @@ export default function HesaplarScreen({ navigation }: Props) {
     },
     [marketData]
   );
+
   const getMarketPriceFor = useCallback(
-    (t: YatirimVarlikTuru | undefined) => {
-      if (!t || t === "TL") return undefined;
+    (t: AssetType | undefined) => {
+      if (!t) return undefined;
       if (t === "USD") return getRate(["USDTRY", "USD/TRY", "USD_TRY"]);
       if (t === "EUR") return getRate(["EURTRY", "EUR/TRY", "EUR_TRY"]);
       return getRate(["GRAM_ALTIN_TRY", "GRAM_ALTIN", "GRAM/TRY", "XAU_TRY", "XAUTRY"]);
@@ -140,634 +152,297 @@ export default function HesaplarScreen({ navigation }: Props) {
     [getRate]
   );
 
-  const currentMarketPrice = useMemo(() => {
-    if (varlikTuru === "TL") return undefined;
-    if (varlikTuru === "USD") {
-      return getRate(["USDTRY", "USD/TRY", "USD_TRY"]);
-    }
-    if (varlikTuru === "EUR") {
-      return getRate(["EURTRY", "EUR/TRY", "EUR_TRY"]);
-    }
-    return getRate(["GRAM_ALTIN_TRY", "GRAM_ALTIN", "GRAM/TRY", "XAU_TRY", "XAUTRY"]);
-  }, [getRate, varlikTuru]);
-
-  const fetchMarket = useCallback(async () => {
-    setMarketLoading(true);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const res = await api.get(`${marketBaseUrl}/api/market/latest`);
-      const payload: MarketLatestResponse = res.data;
-      if (payload?.ok && payload?.data) {
-        setMarketData(payload.data);
-      }
-    } catch (err: any) {
-      console.log("Market latest hata:", err?.response?.data || err?.message);
-    } finally {
-      setMarketLoading(false);
-    }
-  }, [marketBaseUrl]);
-
-  useEffect(() => {
-    fetchMarket();
-  }, [fetchMarket]);
-
-  useEffect(() => {
-    fetchMyYatirimlar();
-  }, [fetchMyYatirimlar]);
-  useFocusEffect(
-    useCallback(() => {
-      fetchMyYatirimlar();
-    }, [fetchMyYatirimlar])
-  );
-
-  const handleCreate = useCallback(async () => {
-    const adet = parseNumberTR(adetText);
-    const ilkAlisFiyati = parseNumberTR(ilkAlisText);
-    const guncelFiyat =
-      varlikTuru === "TL" ? Number(ilkAlisFiyati) : Number(currentMarketPrice);
-
-    if (!userInfo?.aileId || !hesapAdi.trim() || !varlikTuru || !adetText.trim() || !ilkAlisText.trim()) {
-      setMsgType("error");
-      setMsgText("Tüm alanlar zorunlu.");
-      setMsgVisible(true);
-      return;
-    }
-
-    if (
-      !Number.isFinite(adet) ||
-      adet <= 0 ||
-      !Number.isFinite(ilkAlisFiyati) ||
-      ilkAlisFiyati <= 0 ||
-      (varlikTuru !== "TL" && (!Number.isFinite(guncelFiyat) || guncelFiyat <= 0))
-    ) {
-      setMsgType("error");
-      setMsgText(
-        varlikTuru === "TL"
-          ? "Sayısal alanlar 0'dan büyük olmalı."
-          : "Sayısal alanlar 0'dan büyük olmalı ve güncel fiyat çekilebilmelidir."
-      );
-      setMsgVisible(true);
-      return;
-    }
-
-    const payload: YatirimCreateRequest = {
-      aileId: userInfo.aileId,
-      hesapAdi: hesapAdi.trim(),
-      varlikTuru,
-      adet,
-      ilkAlisFiyati,
-      guncelFiyat,
-    };
-
-    setSaving(true);
-    try {
-      const data: YatirimCreateResponse = await createYatirim(payload);
-      setMsgType("success");
-      setMsgText("Yatırım hesabı oluşturuldu.");
-      setMsgVisible(true);
-      fetchMyYatirimlar();
+      const data = await fetchPortfolio();
+      setItems(Array.isArray(data) ? data : []);
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
         e?.response?.data?.error ||
-        e?.response?.data?.detail ||
         e?.response?.data ||
         e?.message ||
-        "Yatırım oluşturulamadı.";
-      setMsgType("error");
-      setMsgText(String(msg));
-      setMsgVisible(true);
+        "Portföy yüklenemedi.";
+      setError(String(msg));
+      setItems([]);
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
-  }, [adetText, currentMarketPrice, hesapAdi, ilkAlisText, userInfo, varlikTuru]);
+  }, []);
 
-  const handleMsgClose = () => {
-    setMsgVisible(false);
-  };
+  useEffect(() => {
+    load();
+    fetchMarket();
+  }, [fetchMarket, load]);
 
-  const openAction = (target: YatirimCreateResponse) => {
-    setActionTarget(target);
-    setActionAmount("");
-    setActionType("AZALT");
-    setActionUseMarket(true);
-    setActionPriceText("");
-    setActionVisible(true);
-  };
-  const openRename = (target: YatirimCreateResponse) => {
-    setRenameTarget(target);
-    setRenameText(target.hesapAdi ?? "");
-    setRenameVisible(true);
-  };
-
-  const handleActionSubmit = useCallback(async () => {
-    if (!actionTarget) return;
-    const amount = parseNumberTR(actionAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setMsgType("error");
-      setMsgText("Miktar 0'dan büyük olmalı.");
-      setMsgVisible(true);
-      return;
-    }
-
-    const actionMarketPrice = getMarketPriceFor(actionTarget.varlikTuru);
-    if (actionType === "ARTIR") {
-      const manualPrice = parseNumberTR(actionPriceText);
-      const hasMarket = Number.isFinite(Number(actionMarketPrice));
-      const useMarket = actionUseMarket && hasMarket;
-      const priceToUse = useMarket ? Number(actionMarketPrice) : manualPrice;
-      if (!Number.isFinite(priceToUse) || priceToUse <= 0) {
-        setMsgType("error");
-        setMsgText(useMarket ? "Güncel fiyat alınamadı. Lütfen elle girin." : "Alış fiyatı 0'dan büyük olmalı.");
-        setMsgVisible(true);
-        return;
-      }
-
-      setActionSaving(true);
-      try {
-        const data = await increaseYatirim(actionTarget.yatirimId, Math.abs(amount), priceToUse);
-        setMsgType("success");
-        setMsgText(`Yeni bakiye: ${data.adet}`);
-        setMsgVisible(true);
-        setActionVisible(false);
-        setActionTarget(null);
-        setActionAmount("");
-        fetchMyYatirimlar();
-      } catch (e: any) {
-        const msg =
-          e?.response?.data?.message ||
-          e?.response?.data?.error ||
-          e?.response?.data?.detail ||
-          e?.response?.data ||
-          e?.message ||
-          "İşlem başarısız.";
-        setMsgType("error");
-        setMsgText(String(msg));
-        setMsgVisible(true);
-      } finally {
-        setActionSaving(false);
-      }
-      return;
-    }
-
-    const delta = -Math.abs(amount);
-    setActionSaving(true);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      const data = await changeYatirimAdet(actionTarget.yatirimId, delta);
-      setMsgType("success");
-      setMsgText(`Yeni bakiye: ${data.adet}`);
-      setMsgVisible(true);
-      setActionVisible(false);
-      setActionTarget(null);
-      setActionAmount("");
-      fetchMyYatirimlar();
+      const [data] = await Promise.all([fetchPortfolio(), fetchMarket()]);
+      setItems(Array.isArray(data) ? data : []);
+      setError(null);
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ||
         e?.response?.data?.error ||
-        e?.response?.data?.detail ||
+        e?.response?.data ||
+        e?.message ||
+        "Portföy yenilenemedi.";
+      setError(String(msg));
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  const openTradeModal = useCallback((asset: PortfolioItem["varlikTuru"], type: "ALIS" | "SATIS") => {
+    if (asset !== "USD" && asset !== "EUR" && asset !== "ALTIN") {
+      setError("Geçersiz varlık türü.");
+      return;
+    }
+    setModal({ visible: true, type, asset, assetLocked: true });
+    setQuantityText("");
+    setPriceText("");
+    setAssetOpen(false);
+  }, []);
+
+  const openAddAccount = useCallback(() => {
+    setModal({ visible: true, type: "ALIS", asset: "USD", assetLocked: false });
+    setQuantityText("");
+    setPriceText("");
+    setAssetOpen(false);
+  }, []);
+
+  const submitDisabled = useMemo(() => {
+    if (submitting) return true;
+    const adet = parseNumber(quantityText);
+    const fiyat = parseNumber(priceText);
+    return !Number.isFinite(adet) || adet <= 0 || !Number.isFinite(fiyat) || fiyat <= 0;
+  }, [priceText, quantityText, submitting]);
+
+  const handleSubmit = useCallback(async () => {
+    const adet = parseNumber(quantityText);
+    const fiyat = parseNumber(priceText);
+    if (!Number.isFinite(adet) || adet <= 0 || !Number.isFinite(fiyat) || fiyat <= 0) {
+      setError("Miktar ve fiyat 0'dan büyük olmalıdır.");
+      return;
+    }
+
+    const payload: TransactionRequest = {
+      varlikTuru: modal.asset,
+      tip: modal.type,
+      adet,
+      fiyat,
+    };
+
+    setSubmitting(true);
+    try {
+      await createTransaction(payload);
+      setModal((s) => ({ ...s, visible: false }));
+      await load();
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
         e?.response?.data ||
         e?.message ||
         "İşlem başarısız.";
-      setMsgType("error");
-      setMsgText(String(msg));
-      setMsgVisible(true);
+      setError(String(msg));
     } finally {
-      setActionSaving(false);
+      setSubmitting(false);
     }
-  }, [actionAmount, actionTarget, actionType, actionPriceText, actionUseMarket, fetchMyYatirimlar, getMarketPriceFor]);
+  }, [modal.asset, modal.type, load, priceText, quantityText]);
 
-  const handleRenameSubmit = useCallback(async () => {
-    if (!renameTarget || renameSaving) return;
-    const text = renameText.trim();
-    if (!text) return;
-    setRenameSaving(true);
-    try {
-      await api.put(`/api/yatirim/mine/${renameTarget.yatirimId}/hesap-adi`, {
-        hesapAdi: text,
-      });
-      setMsgType("success");
-      setMsgText("Hesap adı güncellendi.");
-      setMsgVisible(true);
-      setRenameVisible(false);
-      setRenameTarget(null);
-      setRenameText("");
-      fetchMyYatirimlar();
-    } catch (e: any) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.error ||
-        e?.response?.data?.detail ||
-        e?.response?.data ||
-        e?.message ||
-        "Hesap adı güncellenemedi.";
-      setMsgType("error");
-      setMsgText(String(msg));
-      setMsgVisible(true);
-    } finally {
-      setRenameSaving(false);
-    }
-  }, [renameTarget, renameSaving, renameText, fetchMyYatirimlar]);
+  const renderItem = useCallback(
+    ({ item }: { item: PortfolioItem }) => {
+      const unrealizedUp = Number(item.unrealizedKar) >= 0;
+      const realizedUp = Number(item.realizedKar) >= 0;
+      const marketPrice = getMarketPriceFor(item.varlikTuru as AssetType);
+      const backendCurrent = Number(item.guncelDeger) || 0;
+      const marketCurrent =
+        Number.isFinite(Number(marketPrice)) && Number.isFinite(Number(item.toplamAdet))
+          ? Number(marketPrice) * Number(item.toplamAdet)
+          : NaN;
+      const displayCurrent =
+        Number.isFinite(marketCurrent) && marketCurrent > 0 ? marketCurrent : backendCurrent;
+
+      return (
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>{item.varlikTuru}</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>#{item.portfoyId}</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardRow}>
+            <Text style={styles.label}>Toplam Adet</Text>
+            <Text style={styles.value}>{formatQty(item.toplamAdet)}</Text>
+          </View>
+          <View style={styles.cardRow}>
+            <Text style={styles.label}>Ortalama Maliyet</Text>
+            <Text style={styles.value}>₺ {formatMoney(item.ortalamaMaliyet)}</Text>
+          </View>
+          <View style={styles.cardRow}>
+            <Text style={styles.label}>Güncel Değer</Text>
+            <Text style={styles.value}>₺ {formatMoney(displayCurrent)}</Text>
+          </View>
+          <View style={styles.cardRow}>
+            <Text style={styles.label}>Anlık Kâr/Zarar</Text>
+            <Text style={[styles.value, unrealizedUp ? styles.positive : styles.negative]}>
+              {unrealizedUp ? "+" : "-"}₺ {formatMoney(Math.abs(item.unrealizedKar))}
+            </Text>
+          </View>
+          <View style={styles.cardRow}>
+            <Text style={styles.label}>Gerçekleşen Kâr/Zarar</Text>
+            <Text style={[styles.value, realizedUp ? styles.positive : styles.negative]}>
+              {realizedUp ? "+" : "-"}₺ {formatMoney(Math.abs(item.realizedKar))}
+            </Text>
+          </View>
+
+          <View style={styles.cardActions}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.buyBtn]}
+              onPress={() => openTradeModal(item.varlikTuru, "ALIS")}
+            >
+              <Text style={styles.actionText}>Alış Yap</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.sellBtn]}
+              onPress={() => openTradeModal(item.varlikTuru, "SATIS")}
+            >
+              <Text style={styles.actionText}>Satış Yap</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    },
+    [getMarketPriceFor, marketLoading, openTradeModal, styles]
+  );
 
   return (
-    <View style={styles.container}>
-      <ScreenHeader
-        title="Hesaplarım"
-        subtitle="Yatırım hesabı oluştur"
-        left={
-          <HeaderAction
-            label="Geri"
-            icon={<Ionicons name="chevron-back" size={16} color={colors.text} />}
-            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))}
-          />
-        }
-      />
+    <SafeAreaView style={styles.container}>
+      <ScreenHeader title="Hesaplarım" subtitle="Portföy Özeti" />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.formCard}>
-          <Text style={styles.formTitle}>Yatırım Hesabı Oluştur</Text>
-
-          <Text style={styles.label}>Hesap Adı</Text>
-          <TextInput
-            value={hesapAdi}
-            onChangeText={setHesapAdi}
-            placeholder="Örn: Dolar Yatırımı"
-            placeholderTextColor={colors.textMuted}
-            style={styles.input}
-          />
-
-          <Text style={styles.label}>Varlık Türü</Text>
-          <View style={styles.segmentRow}>
-            {(["USD", "EUR", "ALTIN", "TL"] as YatirimVarlikTuru[]).map((t) => {
-              const active = varlikTuru === t;
-              return (
-                <TouchableOpacity
-                  key={t}
-                  style={[styles.segmentBtn, active && styles.segmentBtnActive]}
-                  onPress={() => setVarlikTuru(t)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{t}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Text style={styles.label}>Tutar</Text>
-          <TextInput
-            value={adetText}
-            onChangeText={setAdetText}
-            placeholder="Tutar Giriniz"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="numeric"
-            style={styles.input}
-          />
-
-          <Text style={styles.label}>İlk Alış Fiyatı</Text>
-          <TextInput
-            value={ilkAlisText}
-            onChangeText={setIlkAlisText}
-            placeholder="Örn: 30,00"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="numeric"
-            style={styles.input}
-          />
-
-          {varlikTuru !== "TL" ? (
-            <>
-              <Text style={styles.label}>Güncel Fiyat</Text>
-              <View style={styles.readonlyBox}>
-                <Text style={styles.readonlyText}>
-                  {marketLoading
-                    ? "Yükleniyor..."
-                    : Number.isFinite(Number(currentMarketPrice))
-                    ? formatTRY(Number(currentMarketPrice))
-                    : "Veri yok"}
-                </Text>
-              </View>
-            </>
-          ) : null
-          
-          }
-
-          <TouchableOpacity
-            style={[styles.primaryBtn, saving && { opacity: 0.7 }]}
-            onPress={handleCreate}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color={colors.onAccent} />
-            ) : (
-              <Text style={styles.primaryBtnText}>Oluştur</Text>
-            )}
-          </TouchableOpacity>
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.warning} />
+          <Text style={styles.muted}>Yükleniyor...</Text>
         </View>
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={(item) => String(item.portfoyId)}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={<Text style={styles.muted}>Portföy bulunamadı.</Text>}
+          ListHeaderComponent={error ? <Text style={styles.error}>{error}</Text> : <View style={{ height: 6 }} />}
+        />
+      )}
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Yatırım Hesaplarım</Text>
-          <View style={styles.sectionBadge}>
-            <Text style={styles.sectionBadgeText}>{yatirimlar.length}</Text>
-          </View>
-        </View>
-
-        {yatirimLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.warning} />
-            <Text style={styles.muted}>Yükleniyor...</Text>
-          </View>
-        ) : yatirimError ? (
-          <Text style={styles.error}>{yatirimError}</Text>
-        ) : yatirimlar.length === 0 ? (
-          <Text style={styles.muted}>Yatırım hesabı yok.</Text>
-        ) : (
-          yatirimlar.map((y) => {
-            const displayKarZarar = Number(y.karZarar) || 0;
-            const displayGuncelDeger = Number(y.guncelDeger) || 0;
-            const isUp = displayKarZarar >= 0;
-            return (
-              <View key={y.yatirimId} style={styles.card}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{y.hesapAdi}</Text>
-                  <Text style={styles.cardSub}>
-                    {y.varlikTuru} • Miktar: {formatTRY(Number(y.adet))}
-                  </Text>
-                  <Text style={styles.cardSub}>
-                    Güncel Değer: ₺ {formatTRY(displayGuncelDeger)}
-                  </Text>
-                </View>
-                <View style={styles.cardRight}>
-                  <Text style={[styles.karZarar, isUp ? styles.karZararUp : styles.karZararDown]}>
-                    {isUp ? "+" : "-"}₺ {formatTRY(Math.abs(displayKarZarar))}
-                  </Text>
-                  <TouchableOpacity style={styles.actionBtn} onPress={() => openAction(y)}>
-                    <Text style={styles.actionBtnText}>İşlemler</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
-
-      {actionVisible && (
-        <View style={styles.actionOverlay}>
-          <View style={styles.actionSheet}>
-            <Text style={styles.actionTitle}>İşlem</Text>
-            <Text style={styles.actionSubtitle}>
-              {actionTarget?.hesapAdi} • {actionTarget?.varlikTuru}
-            </Text>
-
-            <View style={styles.segmentRow}>
-              {(["AZALT", "ARTIR"] as const).map((t) => {
-                const active = actionType === t;
-                return (
-                  <TouchableOpacity
-                    key={t}
-                    style={[styles.segmentBtn, active && styles.segmentBtnActive]}
-                    onPress={() => setActionType(t)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                      {t === "AZALT" ? "Düş" : "Ekle"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+      <Modal visible={modal.visible} transparent animationType="slide" onRequestClose={() => setModal((s) => ({ ...s, visible: false }))}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{modal.type === "ALIS" ? "Alış" : "Satış"} İşlemi</Text>
+              <Pressable onPress={() => setModal((s) => ({ ...s, visible: false }))}>
+                <Text style={styles.modalClose}>Kapat</Text>
+              </Pressable>
             </View>
 
-            <View style={styles.sectionDivider} />
-            <TouchableOpacity
-              style={styles.renameRow}
-              onPress={() => actionTarget && openRename(actionTarget)}
-            >
-              <Text style={styles.renameRowText}>Adı Düzenle</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
+            <Text style={styles.inputLabel}>Varlık</Text>
+            {modal.assetLocked ? (
+              <View style={styles.readonlyBox}>
+                <Text style={styles.readonlyText}>{modal.asset}</Text>
+              </View>
+            ) : (
+              <>
+                <Pressable
+                  style={[styles.dropdown, assetOpen && styles.dropdownOpen]}
+                  onPress={() => setAssetOpen((v) => !v)}
+                >
+                  <Text style={styles.dropdownText}>{modal.asset}</Text>
+                  <Ionicons name={assetOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.textMuted} />
+                </Pressable>
+                {assetOpen && (
+                  <View style={styles.dropdownList}>
+                    {ASSETS.map((a) => (
+                      <Pressable
+                        key={a}
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setModal((s) => ({ ...s, asset: a }));
+                          setAssetOpen(false);
+                        }}
+                      >
+                        <Text style={[styles.dropdownItemText, a === modal.asset && styles.dropdownItemActive]}>
+                          {a}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
 
-            <Text style={styles.label}>Miktar</Text>
+            <Text style={styles.inputLabel}>Adet</Text>
             <TextInput
-              value={actionAmount}
-              onChangeText={setActionAmount}
-              placeholder="Örn: 200"
+              value={quantityText}
+              onChangeText={setQuantityText}
+              placeholder="Örn: 100"
               placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
               style={styles.input}
             />
 
-            {actionTarget?.varlikTuru !== "TL" && (
-              <>
-                <Text style={styles.label}>
-                  {actionType === "ARTIR" ? "Alış Fiyatı" : "Güncel Fiyat Tercihi"}
-                </Text>
-                {Number.isFinite(Number(getMarketPriceFor(actionTarget?.varlikTuru))) ? (
-                  <>
-                    <View style={styles.segmentRow}>
-                      {(["ANLIK", "ELLE"] as const).map((t) => {
-                        const active = actionUseMarket ? t === "ANLIK" : t === "ELLE";
-                        return (
-                          <TouchableOpacity
-                            key={t}
-                            style={[styles.segmentBtn, active && styles.segmentBtnActive]}
-                            onPress={() => setActionUseMarket(t === "ANLIK")}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                              {t === "ANLIK" ? "Anlık" : "Elle Gir"}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                    {actionUseMarket ? (
-                      <View style={styles.readonlyBox}>
-                        <Text style={styles.readonlyText}>
-                          {marketLoading
-                            ? "Yükleniyor..."
-                            : formatTRY(Number(getMarketPriceFor(actionTarget?.varlikTuru)))}
-                        </Text>
-                      </View>
-                    ) : (
-                      <TextInput
-                        value={actionPriceText}
-                        onChangeText={setActionPriceText}
-                        placeholder="Örn: 32,50"
-                        placeholderTextColor={colors.textMuted}
-                        keyboardType="numeric"
-                        style={styles.input}
-                      />
-                    )}
-                  </>
-                ) : (
-                  <TextInput
-                    value={actionPriceText}
-                    onChangeText={setActionPriceText}
-                    placeholder="Örn: 32,50"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="numeric"
-                    style={styles.input}
-                  />
-                )}
-              </>
-            )}
-
-            <TouchableOpacity
-              style={[styles.primaryBtn, actionSaving && { opacity: 0.7 }]}
-              onPress={handleActionSubmit}
-              disabled={actionSaving}
-            >
-              {actionSaving ? (
-                <ActivityIndicator color={colors.onAccent} />
-              ) : (
-                <Text style={styles.primaryBtnText}>{actionType === "AZALT" ? "Düş" : "Ekle"}</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={() => {
-                setActionVisible(false);
-                setActionTarget(null);
-              }}
-              disabled={actionSaving}
-            >
-              <Text style={styles.cancelText}>Vazgeç</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {renameVisible && (
-        <View style={styles.actionOverlay}>
-          <View style={styles.actionSheet}>
-            <Text style={styles.actionTitle}>Hesap Adını Düzenle</Text>
-            <Text style={styles.actionSubtitle}>{renameTarget?.hesapAdi}</Text>
-
-            <Text style={styles.label}>Yeni Hesap Adı</Text>
+            <Text style={styles.inputLabel}>Fiyat</Text>
             <TextInput
-              value={renameText}
-              onChangeText={setRenameText}
-              placeholder="Örn: Dolar Yatırımı"
+              value={priceText}
+              onChangeText={setPriceText}
+              placeholder="Örn: 32,50"
               placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
               style={styles.input}
             />
 
-            <TouchableOpacity
-              style={[styles.primaryBtn, renameSaving && { opacity: 0.7 }]}
-              onPress={handleRenameSubmit}
-              disabled={renameSaving}
-            >
-              {renameSaving ? (
-                <ActivityIndicator color={colors.onAccent} />
-              ) : (
-                <Text style={styles.primaryBtnText}>Kaydet</Text>
-              )}
-            </TouchableOpacity>
+            {!!error && <Text style={styles.error}>{error}</Text>}
 
             <TouchableOpacity
-              style={styles.cancelBtn}
-              onPress={() => {
-                setRenameVisible(false);
-                setRenameTarget(null);
-              }}
-              disabled={renameSaving}
+              style={[styles.primaryBtn, submitDisabled && styles.btnDisabled]}
+              onPress={handleSubmit}
+              disabled={submitDisabled}
             >
-              <Text style={styles.cancelText}>Vazgeç</Text>
+              {submitting ? (
+                <ActivityIndicator color={colors.onAccent} />
+              ) : (
+                <Text style={styles.primaryBtnText}>Onayla</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
 
-      <MessageBox
-        visible={msgVisible}
-        title={msgType === "success" ? "Başarılı" : msgType === "error" ? "Hata" : "Bilgi"}
-        message={msgText}
-        type={msgType}
-        onClose={handleMsgClose}
-        confirmText="Tamam"
-      />
-    </View>
+      <View style={styles.bottomBar}>
+        <TouchableOpacity style={styles.addAccountBtn} onPress={openAddAccount}>
+          <Ionicons name="add" size={18} color={colors.onAccent} />
+          <Text style={styles.addAccountText}>Hesap Ekle</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    content: { paddingHorizontal: 16, paddingBottom: 24 },
 
-    formCard: {
-      marginTop: 12,
-      marginBottom: 12,
-      backgroundColor: colors.surface,
-      borderRadius: 16,
-      padding: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    formTitle: { color: colors.text, fontSize: 16, fontWeight: "900", marginBottom: 12 },
-    label: { color: colors.textMuted, fontSize: 12, fontWeight: "800", marginTop: 8, marginBottom: 6 },
-    input: {
-      backgroundColor: colors.surfaceAlt,
-      color: colors.text,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    readonlyBox: {
-      backgroundColor: colors.surfaceAlt,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    readonlyText: { color: colors.text, fontSize: 13, fontWeight: "800" },
-    segmentRow: { flexDirection: "row", gap: 8, marginBottom: 6 },
-    segmentBtn: {
-      flex: 1,
-      paddingVertical: 10,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-      backgroundColor: colors.surfaceAlt,
-      alignItems: "center",
-    },
-    segmentBtnActive: { backgroundColor: colors.warning, borderColor: colors.warning },
-    segmentText: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
-    segmentTextActive: { color: colors.onAccent },
+    listContent: { paddingHorizontal: 16, paddingBottom: 88 },
 
-    primaryBtn: {
-      marginTop: 12,
-      backgroundColor: colors.warning,
-      paddingVertical: 12,
-      borderRadius: 12,
-      alignItems: "center",
-    },
-    primaryBtnText: { color: colors.onAccent, fontWeight: "900" },
-
-    muted: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
-    error: { color: colors.danger, fontSize: 12, fontWeight: "800" },
-    center: { alignItems: "center", paddingVertical: 16, gap: 8 },
-
-    sectionHeader: {
-      marginTop: 6,
-      marginBottom: 8,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
-    sectionBadge: {
-      minWidth: 28,
-      height: 28,
-      borderRadius: 14,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: colors.accentSoft,
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-    },
-    sectionBadgeText: { color: colors.text, fontSize: 12, fontWeight: "900" },
+    center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
+    muted: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
+    error: { color: colors.danger, fontSize: 12, fontWeight: "800", marginBottom: 6 },
 
     card: {
       backgroundColor: colors.surface,
@@ -775,52 +450,49 @@ const createStyles = (colors: ThemeColors) =>
       padding: 14,
       borderWidth: 1,
       borderColor: colors.border,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: 10,
-      gap: 10,
+      marginBottom: 12,
+      shadowColor: "#000",
+      shadowOpacity: 0.25,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 4,
     },
-    cardTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
-    cardSub: { color: colors.textMuted, fontSize: 11, marginTop: 2, fontWeight: "700" },
-    cardRight: { alignItems: "flex-end", gap: 8 },
-    karZarar: { fontSize: 13, fontWeight: "900" },
-    karZararUp: { color: colors.success },
-    karZararDown: { color: colors.danger },
-
-    actionBtn: {
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 10,
+    cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+    cardTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
+    badge: {
       backgroundColor: colors.accentSoft,
+      borderRadius: 10,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
       borderWidth: 1,
       borderColor: colors.borderStrong,
     },
-    actionBtnText: { color: colors.text, fontSize: 11, fontWeight: "800" },
-    renameRow: {
-      marginTop: 10,
-      paddingVertical: 10,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    renameRowText: { color: colors.text, fontSize: 12, fontWeight: "800" },
-    sectionDivider: {
-      height: 1,
-      backgroundColor: colors.divider,
-      marginTop: 8,
-    },
+    badgeText: { color: colors.textMuted, fontSize: 10, fontWeight: "800" },
 
-    actionOverlay: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      top: 0,
-      bottom: 0,
+    cardRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
+    label: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
+    value: { color: colors.text, fontSize: 12, fontWeight: "800" },
+    positive: { color: colors.success },
+    negative: { color: colors.danger },
+
+    cardActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+    actionBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 10,
+      alignItems: "center",
+      borderWidth: 1,
+    },
+    buyBtn: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+    sellBtn: { backgroundColor: "rgba(239,68,68,0.12)", borderColor: colors.danger },
+    actionText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+
+    modalOverlay: {
+      flex: 1,
       backgroundColor: "rgba(0,0,0,0.55)",
       justifyContent: "flex-end",
     },
-    actionSheet: {
+    modalCard: {
       backgroundColor: colors.surface,
       borderTopLeftRadius: 18,
       borderTopRightRadius: 18,
@@ -828,9 +500,86 @@ const createStyles = (colors: ThemeColors) =>
       borderWidth: 1,
       borderColor: colors.border,
     },
-    actionTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
-    actionSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 4, marginBottom: 12, fontWeight: "700" },
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    modalTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+    modalClose: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
 
-    cancelBtn: { alignItems: "center", paddingVertical: 12, marginTop: 6 },
-    cancelText: { color: colors.textMuted, fontWeight: "800" },
+    inputLabel: { color: colors.textMuted, fontSize: 11, fontWeight: "800", marginTop: 10, marginBottom: 6 },
+    input: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      color: colors.text,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    readonlyBox: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    readonlyText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+
+    dropdown: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    dropdownOpen: { borderColor: colors.warning },
+    dropdownText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+    dropdownList: {
+      marginTop: 6,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    dropdownItem: { paddingHorizontal: 12, paddingVertical: 10 },
+    dropdownItemText: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
+    dropdownItemActive: { color: colors.text },
+
+    primaryBtn: {
+      marginTop: 14,
+      backgroundColor: colors.warning,
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: "center",
+    },
+    primaryBtnText: { color: colors.onAccent, fontWeight: "900" },
+    btnDisabled: { opacity: 0.6 },
+
+    bottomBar: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 16,
+      backgroundColor: colors.background,
+      borderTopWidth: 1,
+      borderTopColor: colors.divider,
+    },
+    addAccountBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      backgroundColor: colors.warning,
+      paddingVertical: 12,
+      borderRadius: 12,
+    },
+    addAccountText: { color: colors.onAccent, fontWeight: "900", fontSize: 14 },
   });

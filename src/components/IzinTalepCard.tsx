@@ -6,6 +6,7 @@ type Props = {
   adSoyad: string;
   createdAt?: string;
   aciklama?: string;
+  sourceLabel?: string;
   onApprove?: () => void;
   onReject?: () => void;
   loading?: boolean;
@@ -23,7 +24,15 @@ const formatDate = (iso?: string) => {
   return `${y}-${m}-${day} ${hh}:${mm}`;
 };
 
-export default function IzinTalepCard({ adSoyad, createdAt, aciklama, onApprove, onReject, loading }: Props) {
+export default function IzinTalepCard({
+  adSoyad,
+  createdAt,
+  aciklama,
+  sourceLabel,
+  onApprove,
+  onReject,
+  loading,
+}: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -31,7 +40,8 @@ export default function IzinTalepCard({ adSoyad, createdAt, aciklama, onApprove,
     <View style={styles.card}>
       <Text style={styles.title}>{adSoyad || "Üye"}</Text>
       <Text style={styles.meta}>Tarih: {formatDate(createdAt)}</Text>
-      <Text style={styles.meta}>Açıklama: {aciklama || "-"}</Text>
+      {sourceLabel ? <Text style={styles.meta}>Kaynak: {sourceLabel}</Text> : null}
+      {aciklama ? <Text style={styles.meta}>Açıklama: {aciklama}</Text> : null}
 
       <View style={styles.actions}>
         <TouchableOpacity style={styles.approveBtn} activeOpacity={0.85} onPress={onApprove} disabled={loading}>

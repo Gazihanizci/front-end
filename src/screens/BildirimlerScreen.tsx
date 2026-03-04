@@ -132,6 +132,7 @@ export default function BildirimlerScreen({ navigation }: Props) {
               adSoyad={item.adSoyad}
               createdAt={item.createdAt}
               aciklama={item.aciklama}
+              sourceLabel="Aile Cüzdanı"
               onApprove={() => onApprove(item.talepId)}
               onReject={() => onReject(item.talepId)}
               loading={busyId === item.talepId}

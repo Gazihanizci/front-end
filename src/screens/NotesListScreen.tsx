@@ -234,15 +234,17 @@ export default function NotesListScreen({ navigation }: Props) {
         <View style={styles.modalBackdrop}>
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>{editingNote ? "Not Düzenle" : "Yeni Not"}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Notunu yaz..."
-              placeholderTextColor={colors.textMuted}
-              value={noteText}
-              onChangeText={setNoteText}
-              multiline
-              textAlignVertical="top"
-            />
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Notunu yaz..."
+                placeholderTextColor={colors.textMuted}
+                value={noteText}
+                onChangeText={setNoteText}
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <TouchableOpacity
               style={[styles.primaryBtn, saving && { opacity: 0.6 }]}
@@ -337,7 +339,7 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) =>
       justifyContent: "flex-end",
     },
     sheet: {
-      height: "55%",
+      height: "70%",
       backgroundColor: colors.surface,
       borderTopLeftRadius: 18,
       borderTopRightRadius: 18,
@@ -346,12 +348,16 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) =>
       borderColor: colors.border,
     },
     sheetTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginBottom: 10 },
+    inputContainer: {
+      flex: 1,
+      marginBottom: 10,
+    },
     input: {
       backgroundColor: colors.surfaceAlt,
       color: colors.text,
       padding: 14,
       borderRadius: 12,
-      marginBottom: 10,
+      flex: 1,
       minHeight: 140,
     },
     primaryBtn: {

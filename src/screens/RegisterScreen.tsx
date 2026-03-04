@@ -42,6 +42,7 @@ export default function RegisterScreen({ navigation }: Props) {
   const [email, setEmail] = useState("");
   const [parola, setParola] = useState("");
   const [telefon, setTelefon] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
 
@@ -126,6 +127,13 @@ export default function RegisterScreen({ navigation }: Props) {
         res?.data?.message ||
         "Kayıt başarılı. Emailinize doğrulama kodu gönderildi.";
       showMsg("success", String(serverMsg));
+      setTimeout(() => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate("Login");
+        }
+      }, 600);
     } catch (err: any) {
       const data = err?.response?.data;
       const status = err?.response?.status;
@@ -236,14 +244,23 @@ export default function RegisterScreen({ navigation }: Props) {
                 value={email}
                 onChangeText={setEmail}
               />
-              <TextInput
-                style={styles.input}
-                placeholder="Şifre"
-                placeholderTextColor={colors.textMuted}
-                secureTextEntry
-                value={parola}
-                onChangeText={setParola}
-              />
+              <View style={styles.passwordRow}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  placeholder="Şifre"
+                  placeholderTextColor={colors.textMuted}
+                  secureTextEntry={!showPassword}
+                  value={parola}
+                  onChangeText={setParola}
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowPassword((v) => !v)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.text} />
+                </TouchableOpacity>
+              </View>
               <View style={styles.passwordRules}>
                 <Text style={styles.rulesTitle}>Şifre Kriterleri</Text>
                 <View style={styles.ruleRow}>
@@ -462,6 +479,28 @@ const createStyles = (colors: ThemeColors) =>
       padding: 14,
       borderRadius: 10,
       marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    passwordRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    passwordInput: {
+      flex: 1,
+      marginBottom: 0,
+      paddingRight: 44,
+    },
+    eyeBtn: {
+      position: "absolute",
+      right: 8,
+      height: 40,
+      width: 40,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 10,
+      backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
     },

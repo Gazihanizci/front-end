@@ -1399,6 +1399,82 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
           </TouchableOpacity>
         </View>
 
+        {/* GÜNCEL KURLAR */}
+        <View style={styles.card}>
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.cardTitle}>GÜNCEL KURLAR</Text>
+              <Text style={styles.cardSubtitle}>Döviz ve altın (anlık)</Text>
+              {!!marketUpdatedAt && (
+                <Text style={styles.cardSubtitle}>Son güncelleme: {marketUpdatedAt}</Text>
+              )}
+            </View>
+            <View style={styles.sectionBadge}>
+              <Text style={styles.sectionBadgeText}>Anlık</Text>
+            </View>
+          </View>
+
+          <View style={styles.rateGrid}>
+            <View style={styles.rateCard}>
+              <View style={styles.rateTop}>
+                <View style={[styles.rateIcon, styles.rateIconUsd]}>
+                  <Text style={[styles.rateIconText, styles.rateIconTextUsd]}>USD</Text>
+                </View>
+                <Text style={styles.rateCode}>Dolar / TL</Text>
+              </View>
+              <Text style={styles.rateValue}>
+                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(getRate(["USDTRY", "USD/TRY", "USD_TRY"]))}
+              </Text>
+            </View>
+
+            <View style={styles.rateCard}>
+              <View style={styles.rateTop}>
+                <View style={[styles.rateIcon, styles.rateIconEur]}>
+                  <Text style={[styles.rateIconText, styles.rateIconTextEur]}>EUR</Text>
+                </View>
+                <Text style={styles.rateCode}>Euro / TL</Text>
+              </View>
+              <Text style={styles.rateValue}>
+                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(getRate(["EURTRY", "EUR/TRY", "EUR_TRY"]))}
+              </Text>
+            </View>
+
+            <View style={styles.rateCard}>
+              <View style={styles.rateTop}>
+                <View style={[styles.rateIcon, styles.rateIconGbp]}>
+                  <Text style={[styles.rateIconText, styles.rateIconTextGbp]}>GBP</Text>
+                </View>
+                <Text style={styles.rateCode}>Sterlin / TL</Text>
+              </View>
+              <Text style={styles.rateValue}>
+                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(getRate(["GBPTRY", "GBP/TRY", "GBP_TRY"]))}
+              </Text>
+            </View>
+
+            <View style={styles.rateCard}>
+              <View style={styles.rateTop}>
+                <View style={[styles.rateIcon, styles.rateIconGold]}>
+                  <Text style={[styles.rateIconText, styles.rateIconTextGold]}>ALTIN</Text>
+                </View>
+                <Text style={styles.rateCode}>Gram Altın</Text>
+              </View>
+              <Text style={styles.rateValue}>
+                {marketLoading
+                  ? "YÜKLENİYOR..."
+                  : formatRateValue(
+                      getRate([
+                        "GRAM_ALTIN_TRY",
+                        "GRAM_ALTIN",
+                        "GRAM/TRY",
+                        "XAU_TRY",
+                        "XAUTRY",
+                      ])
+                    )}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* HARCAMALAR NEREYE GİDİYOR? */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>HARCAMALAR NEREYE GİDİYOR?</Text>
@@ -1490,83 +1566,7 @@ const buildLast6MonthsFilled = (raw: AylikAnaliz[] | null | undefined): AylikAna
         </View>
 
 
-                {/* GÜNCEL KURLAR */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={styles.cardTitle}>GÜNCEL KURLAR</Text>
-              <Text style={styles.cardSubtitle}>Döviz ve altın (anlık)</Text>
-              {!!marketUpdatedAt && (
-                <Text style={styles.cardSubtitle}>Son güncelleme: {marketUpdatedAt}</Text>
-              )}
-            </View>
-            <View style={styles.sectionBadge}>
-              <Text style={styles.sectionBadgeText}>Anlık</Text>
-            </View>
-          </View>
-
-          <View style={styles.rateGrid}>
-            <View style={styles.rateCard}>
-              <View style={styles.rateTop}>
-                <View style={[styles.rateIcon, styles.rateIconUsd]}>
-                  <Text style={[styles.rateIconText, styles.rateIconTextUsd]}>USD</Text>
-                </View>
-                <Text style={styles.rateCode}>Dolar / TL</Text>
-              </View>
-              <Text style={styles.rateValue}>
-                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(getRate(["USDTRY", "USD/TRY", "USD_TRY"]))}
-              </Text>
-            </View>
-
-            <View style={styles.rateCard}>
-              <View style={styles.rateTop}>
-                <View style={[styles.rateIcon, styles.rateIconEur]}>
-                  <Text style={[styles.rateIconText, styles.rateIconTextEur]}>EUR</Text>
-                </View>
-                <Text style={styles.rateCode}>Euro / TL</Text>
-              </View>
-              <Text style={styles.rateValue}>
-                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(getRate(["EURTRY", "EUR/TRY", "EUR_TRY"]))}
-              </Text>
-            </View>
-
-            <View style={styles.rateCard}>
-              <View style={styles.rateTop}>
-                <View style={[styles.rateIcon, styles.rateIconGbp]}>
-                  <Text style={[styles.rateIconText, styles.rateIconTextGbp]}>GBP</Text>
-                </View>
-                <Text style={styles.rateCode}>Sterlin / TL</Text>
-              </View>
-              <Text style={styles.rateValue}>
-                {marketLoading ? "YÜKLENİYOR..." : formatRateValue(getRate(["GBPTRY", "GBP/TRY", "GBP_TRY"]))}
-              </Text>
-            </View>
-
-            <View style={styles.rateCard}>
-              <View style={styles.rateTop}>
-                <View style={[styles.rateIcon, styles.rateIconGold]}>
-                  <Text style={[styles.rateIconText, styles.rateIconTextGold]}>ALTIN</Text>
-                </View>
-                <Text style={styles.rateCode}>Gram Altın</Text>
-              </View>
-              <Text style={styles.rateValue}>
-                {marketLoading
-                  ? "YÜKLENİYOR..."
-                  : formatRateValue(
-                      getRate([
-                        "GRAM_ALTIN_TRY",
-                        "GRAM_ALTIN",
-                        "GRAM/TRY",
-                        "XAU_TRY",
-                        "XAUTRY",
-                      ])
-                    )}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* YATIRIM GRAFIGI */}
+                {/* YATIRIM GRAFIGI */}
         <View style={styles.card}>
           <View style={styles.graphHero}>
             <View style={styles.graphHeroGlowA} />
@@ -2574,6 +2574,7 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) => StyleSheet.create
   kzUp: { color: colors.success },
   kzDown: { color: colors.danger },
 });
+
 
 
 

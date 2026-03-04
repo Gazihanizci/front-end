@@ -670,7 +670,7 @@ useEffect(() => {
         visible={leaveConfirmVisible}
         title="Aileden Çık"
         message="Çıkmak istediğinizden emin misiniz?"
-        type="error"
+        type="info"
         onClose={() => setLeaveConfirmVisible(false)}
         onCancel={() => setLeaveConfirmVisible(false)}
         onConfirm={async () => {

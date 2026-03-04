@@ -262,7 +262,7 @@ export default function NotesListScreen({ navigation }: Props) {
 
 const createStyles = (colors: ThemeColors, mode: ThemeMode) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background, paddingTop: 14 },
+    container: { flex: 1, backgroundColor: colors.background },
     listContent: { paddingHorizontal: 16, paddingBottom: 28, gap: 10 },
     headerRow: { marginBottom: 6, gap: 10 },
     tabRow: { flexDirection: "row", gap: 8 },

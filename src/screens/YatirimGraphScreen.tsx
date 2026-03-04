@@ -363,7 +363,7 @@ export default function YatirimGraphScreen({ navigation }: Props) {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background, paddingTop: 14 },
+    container: { flex: 1, backgroundColor: colors.background },
     content: { padding: 16, paddingBottom: 28 },
     segmentWrap: {
       flexDirection: "row",

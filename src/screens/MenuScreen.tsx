@@ -266,7 +266,7 @@ export default function MenuScreen({ navigation }: Props) {
         visible={logoutVisible}
         title="Çıkış Yap"
         message="Çıkmak istediğinizden emin misiniz?"
-        type="error"
+        type="info"
         onClose={() => setLogoutVisible(false)}
         onCancel={() => setLogoutVisible(false)}
         onConfirm={confirmLogout}
@@ -282,7 +282,6 @@ const createStyles = (colors: ThemeColors) =>
     container: {
       flex: 1,
       backgroundColor: colors.background,
-      paddingTop: 14,
     },
 
     profileCard: {

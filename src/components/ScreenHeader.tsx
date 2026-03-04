@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemeColors, useTheme } from "../theme/theme";
 
 type ScreenHeaderProps = {
@@ -39,9 +40,10 @@ export function HeaderAction({ label, icon, onPress, variant = "ghost" }: Header
 export default function ScreenHeader({ title, subtitle, left, right }: ScreenHeaderProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { paddingTop: insets.top - 40}]}>
       <View style={styles.bgGlowA} />
       <View style={styles.bgGlowB} />
 
@@ -62,7 +64,6 @@ export default function ScreenHeader({ title, subtitle, left, right }: ScreenHea
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     wrap: {
-      paddingTop: 12,
       paddingHorizontal: 16,
       paddingBottom: 10,
       backgroundColor: colors.background,

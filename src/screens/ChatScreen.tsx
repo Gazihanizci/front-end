@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import { ThemeColors, ThemeMode, useTheme } from "../theme/theme";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -86,6 +87,7 @@ const ENDPOINT = "http://192.168.234.156:8000/predict";
 export default function ChatScreen({ navigation }: Props) {
   const { colors, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, mode), [colors, mode]);
+  const insets = useSafeAreaInsets();
   const [fxData, setFxData] = useState<FxAssistantItem[]>([]);
   const [fxLoading, setFxLoading] = useState(false);
   const [fxError, setFxError] = useState<string | null>(null);
@@ -675,7 +677,7 @@ export default function ChatScreen({ navigation }: Props) {
     <KeyboardAvoidingView
       style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 6 : 0}
     >
       <ScreenHeader
         title="SOHBET"
@@ -858,7 +860,7 @@ export default function ChatScreen({ navigation }: Props) {
         ) : null}
       </ScrollView>
 
-      <View style={styles.inputBar}>
+      <View style={[styles.inputBar, { paddingBottom: insets.bottom + (Platform.OS === "ios" ? 10 : 8) }]}>
         <View style={styles.inputWrap}>
           <TextInput
             placeholder="Örn: Bunlar hakkında bilgi almak istiyorum."

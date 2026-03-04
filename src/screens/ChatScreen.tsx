@@ -16,6 +16,8 @@ import { ThemeColors, ThemeMode, useTheme } from "../theme/theme";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../App";
 import api, { BASE_URL } from "../config/api";
+import { detectIntentLocal, detectIntentWithOpenAI } from "../services/aiIntentService";
+import { fetchIntentAnswer } from "../services/chatBackendService";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -101,6 +103,7 @@ export default function ChatScreen({ navigation }: Props) {
     "market" | "summary" | "category" | "investment" | null
   >(null);
   const scrollRef = useRef<ScrollView | null>(null);
+  const [sending, setSending] = useState(false);
 
   const marketBaseUrl = useMemo(() => {
     const raw = String(BASE_URL || "").trim();
@@ -387,290 +390,34 @@ export default function ChatScreen({ navigation }: Props) {
 
   const sendMessage = useCallback(async () => {
     const text = inputText.trim();
-    if (!text) return;
+    if (!text || sending) return;
     pushUserMessage(text);
     setInputText("");
-    const lowered = text.toLowerCase();
-    const hasAny = (patterns: string[]) => patterns.some((p) => lowered.includes(p));
-    const intent = detectIntent(text);
-
-    const getAnalizFor = async (key: string) => {
-      const analizList = await fetchMonthlyAnaliz();
-      return pickByYM(analizList, key);
-    };
-
-    if (intent === "LAST_MONTH_SPEND_EXPLAIN" || lowered.includes("geçen ay harcama")) {
+    setSending(true);
+    try {
+      let aiResult;
       try {
-        const lastKey = lastMonthKey();
-        const currentKey = currentMonthKey();
-        const [lastSummary, currentSummary, analizList] = await Promise.all([
-          fetchMonthlySummary(lastKey),
-          fetchMonthlySummary(currentKey),
-          fetchMonthlyAnaliz(),
-        ]);
-        const lastExpenses = lastSummary.filter((x) => x.tip === "GIDER");
-        const currentExpenses = currentSummary.filter((x) => x.tip === "GIDER");
-
-        const lastTotal = lastExpenses.reduce((s, x) => s + (Number(x.toplamTutar) || 0), 0);
-        const currentTotal = currentExpenses.reduce((s, x) => s + (Number(x.toplamTutar) || 0), 0);
-
-        const sortByAmount = (arr: typeof lastExpenses) =>
-          [...arr].sort((a, b) => b.toplamTutar - a.toplamTutar);
-        const lastTop3 = sortByAmount(lastExpenses).slice(0, 3);
-        const currentTop3 = sortByAmount(currentExpenses).slice(0, 3);
-
-        const change = currentTotal - lastTotal;
-        const changePct = lastTotal > 0 ? (change / lastTotal) * 100 : null;
-
-        const listLine = (arr: typeof lastExpenses) =>
-          arr.length === 0
-            ? "Veri yok."
-            : arr
-                .map((x, i) => `${i + 1}) ${x.kategoriAd} ${formatTRY(x.toplamTutar)} TL`)
-                .join("\n");
-
-        const lastAnaliz = pickByYM(analizList, lastKey);
-        const currentAnaliz = pickByYM(analizList, currentKey);
-
-        const analizLine = (label: string, a: typeof lastAnaliz) =>
-          a
-            ? `${label} Gelir: ${formatTRY(a.aylikGelir)} TL, Gider: ${formatTRY(
-                a.aylikGider
-              )} TL`
-            : `${label} Gelir/Gider verisi yok.`;
-
-        const reply =
-          lastExpenses.length === 0
-            ? `${lastKey} için gider bulunamadı.`
-            : `Geçen ay (${lastKey}) toplam giderin ${formatTRY(
-                lastTotal
-              )} TL. En büyük 3 kalem: ${listLine(lastTop3)}.\n` +
-              `Bu ay (${currentKey}) toplam giderin ${formatTRY(
-                currentTotal
-              )} TL. En büyük 3 kalem: ${listLine(currentTop3)}.\n` +
-              `Aylık değişim: ${formatTRY(change)} TL${
-                changePct !== null ? ` (%${changePct.toFixed(1)})` : ""
-              }.\n` +
-              `${analizLine("Geçen ay", lastAnaliz)}\n${analizLine("Bu ay", currentAnaliz)}.`;
-        replyWithText(reply);
-      } catch (err: any) {
-        replyWithText("Geçen ay harcama verisi alınamadı.");
+        aiResult = await detectIntentWithOpenAI(text);
+      } catch {
+        aiResult = detectIntentLocal(text);
       }
-      return;
-    }
-
-    if (
-      intent === "MARKET_RATES" &&
-      hasAny(["anlık", "canlı", "güncel", "şu an", "spot", "anlık kur", "güncel kur"])
-    ) {
-      const latest = await fetchMarketLatest();
-      const data = latest ?? marketData;
-      const rateItems = [
-        { key: "USD/TRY", labels: ["dolar", "usd"], keys: ["USDTRY", "USD/TRY", "USD_TRY"] },
-        { key: "EUR/TRY", labels: ["euro", "eur"], keys: ["EURTRY", "EUR/TRY", "EUR_TRY"] },
-        { key: "GBP/TRY", labels: ["sterlin", "gbp"], keys: ["GBPTRY", "GBP/TRY", "GBP_TRY"] },
-        { key: "JPY/TRY", labels: ["yen", "jpy", "japon"], keys: ["JPYTRY", "JPY/TRY", "JPY_TRY"] },
-        { key: "CHF/TRY", labels: ["frank", "chf", "isviçre", "isvicre"], keys: ["CHFTRY", "CHF/TRY", "CHF_TRY"] },
-        { key: "CAD/TRY", labels: ["kanada", "cad"], keys: ["CADTRY", "CAD/TRY", "CAD_TRY"] },
-        { key: "AUD/TRY", labels: ["avustralya", "aud"], keys: ["AUDTRY", "AUD/TRY", "AUD_TRY"] },
-        { key: "NZD/TRY", labels: ["yeni zelanda", "nzd"], keys: ["NZDTRY", "NZD/TRY", "NZD_TRY"] },
-        { key: "SEK/TRY", labels: ["isvec", "isveç", "sek"], keys: ["SEKTRY", "SEK/TRY", "SEK_TRY"] },
-        { key: "NOK/TRY", labels: ["norvec", "norveç", "nok"], keys: ["NOKTRY", "NOK/TRY", "NOK_TRY"] },
-        { key: "DKK/TRY", labels: ["danimarka", "dkk"], keys: ["DKKTRY", "DKK/TRY", "DKK_TRY"] },
-        { key: "PLN/TRY", labels: ["polonya", "pln", "zloti", "zloty"], keys: ["PLNTRY", "PLN/TRY", "PLN_TRY"] },
-        {
-          key: "Gram Altın",
-          labels: ["altın", "gram"],
-          keys: ["GRAM_ALTIN_TRY", "GRAM_ALTIN", "GRAM/TRY", "XAU_TRY", "XAUTRY"],
-        },
-      ];
-
-      const wantsSpecific = rateItems.some((r) => r.labels.some((l) => lowered.includes(l)));
-      const list = rateItems
-        .filter((r) => (wantsSpecific ? r.labels.some((l) => lowered.includes(l)) : true))
-        .map((r) => {
-          const val = getRateFrom(data, r.keys);
-          return Number.isFinite(val) ? `${r.key}: ₺ ${formatTRY(val as number)}` : null;
-        })
-        .filter(Boolean) as string[];
-
-      if (list.length === 0) {
-        return replyWithText("Kur verileri şu an alınamadı. Biraz sonra tekrar dener misin?");
+      if (!aiResult?.intent || aiResult.intent === "UNKNOWN" || aiResult.confidence < 0.35) {
+        replyWithText("Anlayamadım. Hazır sorulardan birini sorabilir misin?");
+        return;
       }
-      return replyWithText(list.join("\n"));
-    }
-
-    if (intent === "MONTHLY_INCOME_CURRENT" || hasAny(["bu ay toplam gelir", "bu ayki gelir"])) {
-      const key = currentMonthKey();
-      const analiz = await getAnalizFor(key);
-      return replyWithText(
-        analiz
-          ? `Bu ay (${key}) toplam gelir ${formatTRY(analiz.aylikGelir)} TL.`
-          : `Bu ay (${key}) için gelir verisi yok.`
-      );
-    }
-
-    if (intent === "MONTHLY_EXPENSE_CURRENT" || hasAny(["bu ay toplam gider", "bu ayki gider"])) {
-      const key = currentMonthKey();
-      const analiz = await getAnalizFor(key);
-      return replyWithText(
-        analiz
-          ? `Bu ay (${key}) toplam gider ${formatTRY(analiz.aylikGider)} TL.`
-          : `Bu ay (${key}) için gider verisi yok.`
-      );
-    }
-
-    if (intent === "MONTHLY_INCOME_LAST" || lowered.includes("geçen ay toplam gelir")) {
-      const key = lastMonthKey();
-      const analiz = await getAnalizFor(key);
-      return replyWithText(
-        analiz
-          ? `Geçen ay (${key}) toplam gelir ${formatTRY(analiz.aylikGelir)} TL.`
-          : `Geçen ay (${key}) için gelir verisi yok.`
-      );
-    }
-
-    if (intent === "MONTHLY_EXPENSE_LAST" || lowered.includes("geçen ay toplam gider")) {
-      const key = lastMonthKey();
-      const analiz = await getAnalizFor(key);
-      return replyWithText(
-        analiz
-          ? `Geçen ay (${key}) toplam gider ${formatTRY(analiz.aylikGider)} TL.`
-          : `Geçen ay (${key}) için gider verisi yok.`
-      );
-    }
-
-    if (intent === "MONTHLY_COMPARE" || lowered.includes("bu ay vs geçen ay kıyas") || lowered.includes("kıyas")) {
-      const lastKey = lastMonthKey();
-      const currentKey = currentMonthKey();
-      const [lastAnaliz, currentAnaliz] = await Promise.all([
-        getAnalizFor(lastKey),
-        getAnalizFor(currentKey),
-      ]);
-      if (!lastAnaliz || !currentAnaliz) {
-        return replyWithText("Kıyas için yeterli veri yok.");
-      }
-      const gelirDiff = currentAnaliz.aylikGelir - lastAnaliz.aylikGelir;
-      const giderDiff = currentAnaliz.aylikGider - lastAnaliz.aylikGider;
-      return replyWithText(
-        `Gelir kıyas: Bu ay ${formatTRY(currentAnaliz.aylikGelir)} TL, geçen ay ${formatTRY(
-          lastAnaliz.aylikGelir
-        )} TL (fark ${formatTRY(gelirDiff)} TL).\n` +
-          `Gider kıyas: Bu ay ${formatTRY(currentAnaliz.aylikGider)} TL, geçen ay ${formatTRY(
-            lastAnaliz.aylikGider
-          )} TL (fark ${formatTRY(giderDiff)} TL).`
-      );
-    }
-
-    if (intent === "TOP_EXPENSE_CURRENT" || lowered.includes("bu ay en çok gider")) {
-      const key = currentMonthKey();
-      const summary = await fetchMonthlySummary(key);
-      const expenses = summary.filter((x) => x.tip === "GIDER");
-      const top = [...expenses].sort((a, b) => b.toplamTutar - a.toplamTutar)[0];
-      return replyWithText(
-        top
-          ? `Bu ay (${key}) en yüksek gider: ${top.kategoriAd} (${formatTRY(top.toplamTutar)} TL).`
-          : `Bu ay (${key}) için gider verisi yok.`
-      );
-    }
-
-    if (intent === "TOP_EXPENSE_LAST" || lowered.includes("geçen ay en çok gider")) {
-      const key = lastMonthKey();
-      const summary = await fetchMonthlySummary(key);
-      const expenses = summary.filter((x) => x.tip === "GIDER");
-      const top = [...expenses].sort((a, b) => b.toplamTutar - a.toplamTutar)[0];
-      return replyWithText(
-        top
-          ? `Geçen ay (${key}) en yüksek gider: ${top.kategoriAd} (${formatTRY(top.toplamTutar)} TL).`
-          : `Geçen ay (${key}) için gider verisi yok.`
-      );
-    }
-
-    if (intent === "CATEGORY_CURRENT" || lowered.includes("kategori kırılımı bu ay")) {
-      const key = currentMonthKey();
-      const summary = await fetchMonthlySummary(key);
-      const expenses = summary.filter((x) => x.tip === "GIDER");
-      const top5 = [...expenses].sort((a, b) => b.toplamTutar - a.toplamTutar).slice(0, 5);
-      return replyWithText(
-        top5.length > 0
-          ? `Bu ay (${key}) kategori kırılımı (top 5 gider):\n${top5
-              .map((x, i) => `${i + 1}) ${x.kategoriAd} ${formatTRY(x.toplamTutar)} TL`)
-              .join("\n")}`
-          : `Bu ay (${key}) için kategori verisi yok.`
-      );
-    }
-
-    if (intent === "CATEGORY_LAST" || lowered.includes("kategori kırılımı geçen ay")) {
-      const key = lastMonthKey();
-      const summary = await fetchMonthlySummary(key);
-      const expenses = summary.filter((x) => x.tip === "GIDER");
-      const top5 = [...expenses].sort((a, b) => b.toplamTutar - a.toplamTutar).slice(0, 5);
-      return replyWithText(
-        top5.length > 0
-          ? `Geçen ay (${key}) kategori kırılımı (top 5 gider):\n${top5
-              .map((x, i) => `${i + 1}) ${x.kategoriAd} ${formatTRY(x.toplamTutar)} TL`)
-              .join("\n")}`
-          : `Geçen ay (${key}) için kategori verisi yok.`
-      );
-    }
-
-    if (intent === "INVESTMENT_SUMMARY" || lowered.includes("yatırım")) {
-      const data = await fetchYatirimGraph("HESAP");
-      if (!data) {
-        return replyWithText("Yatırım verisi alınamadı.");
-      }
-      const points = Array.isArray(data.points) ? data.points : [];
-      const sumKz = points.reduce((s: number, p: any) => s + (Number(p.karZarar) || 0), 0);
-      const detailLines = points.map((p: any, i: number) => {
-        const label = String(p.label ?? "Hesap");
-        const kz = formatTRY(Number(p.karZarar) || 0);
-        return `${i + 1}) ${label} ${kz} TL`;
-      });
-      const detail = detailLines.length ? `\nHesap bazlı K/Z:\n${detailLines.join("\n")}` : "";
-      return replyWithText(`Toplam K/Z: ${formatTRY(sumKz)} TL.${detail}`);
-    }
-
-    const inferred = inferPredictSymbol(text);
-    const predictSymbol = inferred ?? selectedSymbol;
-    if (predictSymbol) {
-      return sendPredictForSymbol(predictSymbol);
-    }
-
-    const data = await fetchFxData();
-    if (data && data.length > 0) {
-      const filterSymbol = inferred ?? selectedSymbol;
-      const filtered = filterSymbol ? data.filter((x) => x.symbol === filterSymbol) : data;
-      if (filtered.length > 0) {
-        const lines = filtered
-          .slice(0, 3)
-          .map(
-            (x) =>
-              `${x.symbol} (${x.date}) | Risk: ${x.risk} | H1 ${format6(
-                x.forecast?.h1
-              )} · H3 ${format6(x.forecast?.h3)} · H7 ${format6(x.forecast?.h7)}`
-          )
-          .join("\n");
-        const insight = filtered[0]?.insight ? `\n\n${filtered[0].insight}` : "";
-        replyWithText(`${lines}${insight}`);
-      }
+      const responseText = await fetchIntentAnswer(aiResult.intent);
+      replyWithText(responseText);
+    } catch (err: any) {
+      replyWithText("Şu anda cevap veremiyorum. Biraz sonra tekrar dener misin?");
+    } finally {
+      setSending(false);
     }
   }, [
     inputText,
     pushUserMessage,
     replyWithText,
-    sendPredictForSymbol,
-    fetchFxData,
-    fetchMarketLatest,
-    selectedSymbol,
-    fetchMonthlySummary,
-    fetchMonthlyAnaliz,
-    getRateFrom,
-    detectIntent,
-    normalizeText,
-    inferPredictSymbol,
-    getSymbolRateFrom,
-    marketData,
-    sendPredictForSymbol,
+    detectIntentLocal,
+    sending,
   ]);
 
   return (
@@ -869,8 +616,13 @@ export default function ChatScreen({ navigation }: Props) {
             value={inputText}
             onChangeText={setInputText}
           />
-          <TouchableOpacity style={styles.sendBtn} activeOpacity={0.85} onPress={sendMessage}>
-            <Text style={styles.sendBtnText}>Gönder</Text>
+          <TouchableOpacity
+            style={[styles.sendBtn, sending && { opacity: 0.6 }]}
+            activeOpacity={0.85}
+            onPress={sendMessage}
+            disabled={sending}
+          >
+            {sending ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.sendBtnText}>Gönder</Text>}
           </TouchableOpacity>
         </View>
 

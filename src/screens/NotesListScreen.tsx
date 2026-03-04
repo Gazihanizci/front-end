@@ -50,8 +50,9 @@ export default function NotesListScreen({ navigation }: Props) {
     try {
       const url = type === "USER" ? "/api/notlar" : "/api/notlar/aile";
       const res = await api.get(url);
-      const data = Array.isArray(res.data) ? res.data : [];
-      setItems(data as NotResponse[]);
+      const data = Array.isArray(res.data) ? (res.data as NotResponse[]) : [];
+      const filtered = data.filter((x) => x.notTuru === type);
+      setItems(filtered);
     } catch (err: any) {
       console.log("Notlar listesi hata:", err?.response?.data || err?.message);
       setError("Notlar yüklenemedi.");

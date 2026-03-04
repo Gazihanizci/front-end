@@ -38,7 +38,7 @@ export default function MessageBox({
   const showConfirm = typeof onConfirm === "function";
   const statusColor = isSuccess ? colors.success : isError ? colors.danger : colors.accent;
   const overlayColor = mode === "light" ? "rgba(10,20,35,0.45)" : "rgba(0,0,0,0.7)";
-  const badgeLabel = isSuccess ? "Başarılı" : isError ? "Hata" : "Bilgi";
+  const badgeLabel = isSuccess ? "Başarılı" : isError ? "Bilgi" : "Bilgi";
 
   return (
     <Modal

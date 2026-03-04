@@ -1,0 +1,62 @@
+export const INTENTS = [
+  "USDTRY",
+  "EURTRY",
+  "GBPTRY",
+  "XAUUSD",
+  "XAGUSD",
+  "BTCUSD",
+  "ETHUSD",
+  "THIS_MONTH_INCOME",
+  "THIS_MONTH_EXPENSE",
+  "LAST_MONTH_INCOME",
+  "LAST_MONTH_EXPENSE",
+  "MONTH_COMPARISON",
+  "TOP_CATEGORY_THIS_MONTH",
+  "TOP_CATEGORY_LAST_MONTH",
+  "CATEGORY_BREAKDOWN_THIS_MONTH",
+  "CATEGORY_BREAKDOWN_LAST_MONTH",
+  "INVESTMENT_SUMMARY",
+] as const;
+
+export type IntentId = (typeof INTENTS)[number] | "UNKNOWN";
+
+export const INTENT_DESCRIPTIONS: Record<Exclude<IntentId, "UNKNOWN">, string> = {
+  USDTRY: "Dolar/TL kuru",
+  EURTRY: "Euro/TL kuru",
+  GBPTRY: "Sterlin/TL kuru",
+  XAUUSD: "Altın/Usd fiyatı",
+  XAGUSD: "Gümüş/Usd fiyatı",
+  BTCUSD: "Bitcoin/Usd fiyatı",
+  ETHUSD: "Ethereum/Usd fiyatı",
+  THIS_MONTH_INCOME: "Bu ay toplam gelir",
+  THIS_MONTH_EXPENSE: "Bu ay toplam gider",
+  LAST_MONTH_INCOME: "Geçen ay toplam gelir",
+  LAST_MONTH_EXPENSE: "Geçen ay toplam gider",
+  MONTH_COMPARISON: "Bu ay vs geçen ay gelir/gider kıyas",
+  TOP_CATEGORY_THIS_MONTH: "Bu ay en çok gider kategorisi",
+  TOP_CATEGORY_LAST_MONTH: "Geçen ay en çok gider kategorisi",
+  CATEGORY_BREAKDOWN_THIS_MONTH: "Bu ay kategori kırılımı",
+  CATEGORY_BREAKDOWN_LAST_MONTH: "Geçen ay kategori kırılımı",
+  INVESTMENT_SUMMARY: "Yatırım portföy özeti",
+};
+
+export const INTENT_LABELS: Record<Exclude<IntentId, "UNKNOWN">, string> = {
+  USDTRY: "USD/TRY",
+  EURTRY: "EUR/TRY",
+  GBPTRY: "GBP/TRY",
+  XAUUSD: "XAU/USD",
+  XAGUSD: "XAG/USD",
+  BTCUSD: "BTC/USD",
+  ETHUSD: "ETH/USD",
+  THIS_MONTH_INCOME: "Bu ay toplam gelir",
+  THIS_MONTH_EXPENSE: "Bu ay toplam gider",
+  LAST_MONTH_INCOME: "Geçen ay toplam gelir",
+  LAST_MONTH_EXPENSE: "Geçen ay toplam gider",
+  MONTH_COMPARISON: "Bu ay vs geçen ay kıyas",
+  TOP_CATEGORY_THIS_MONTH: "Bu ay en çok gider kategorisi",
+  TOP_CATEGORY_LAST_MONTH: "Geçen ay en çok gider kategorisi",
+  CATEGORY_BREAKDOWN_THIS_MONTH: "Bu ay kategori kırılımı",
+  CATEGORY_BREAKDOWN_LAST_MONTH: "Geçen ay kategori kırılımı",
+  INVESTMENT_SUMMARY: "Yatırım kâr/zarar özeti",
+};
+

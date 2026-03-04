@@ -17,6 +17,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import api, { BASE_URL } from "../config/api";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
+import MessageBox from "../components/MessageBox";
 import { ThemeColors, useTheme } from "../theme/theme";
 import { RootStackParamList } from "../../App";
 
@@ -96,6 +97,8 @@ export default function HesaplarScreen() {
   const [error, setError] = useState<string | null>(null);
   const [marketLoading, setMarketLoading] = useState(true);
   const [marketData, setMarketData] = useState<MarketLatestResponse["data"] | null>(null);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
 
   const [modal, setModal] = useState<ModalMode>({
     visible: false,
@@ -105,6 +108,7 @@ export default function HesaplarScreen() {
   });
   const [quantityText, setQuantityText] = useState("");
   const [priceText, setPriceText] = useState("");
+  const [priceMode, setPriceMode] = useState<"live" | "manual">("live");
   const [submitting, setSubmitting] = useState(false);
   const [assetOpen, setAssetOpen] = useState(false);
 
@@ -176,6 +180,40 @@ export default function HesaplarScreen() {
     }
   }, []);
 
+  const deletePortfolio = useCallback(
+    async (portfoyId: number) => {
+      try {
+        await api.delete(`/api/portfoy/${portfoyId}`);
+        setItems((prev) => prev.filter((x) => x.portfoyId !== portfoyId));
+      } catch (e: any) {
+        const msg =
+          e?.response?.data?.message ||
+          e?.response?.data?.error ||
+          e?.response?.data ||
+          e?.message ||
+          "Hesap silinemedi.";
+        setError(String(msg));
+      }
+    },
+    []
+  );
+
+  const openDeleteConfirm = useCallback((portfoyId: number) => {
+    setDeleteTargetId(portfoyId);
+    setDeleteConfirmVisible(true);
+  }, []);
+
+  const closeDeleteConfirm = useCallback(() => {
+    setDeleteConfirmVisible(false);
+    setDeleteTargetId(null);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (deleteTargetId == null) return;
+    await deletePortfolio(deleteTargetId);
+    closeDeleteConfirm();
+  }, [deleteTargetId, deletePortfolio, closeDeleteConfirm]);
+
   useEffect(() => {
     load();
     fetchMarket();
@@ -208,6 +246,7 @@ export default function HesaplarScreen() {
     setModal({ visible: true, type, asset, assetLocked: true });
     setQuantityText("");
     setPriceText("");
+    setPriceMode("live");
     setAssetOpen(false);
   }, []);
 
@@ -215,6 +254,7 @@ export default function HesaplarScreen() {
     setModal({ visible: true, type: "ALIS", asset: "USD", assetLocked: false });
     setQuantityText("");
     setPriceText("");
+    setPriceMode("live");
     setAssetOpen(false);
   }, []);
 
@@ -224,6 +264,14 @@ export default function HesaplarScreen() {
     const fiyat = parseNumber(priceText);
     return !Number.isFinite(adet) || adet <= 0 || !Number.isFinite(fiyat) || fiyat <= 0;
   }, [priceText, quantityText, submitting]);
+
+  useEffect(() => {
+    if (!modal.visible || priceMode !== "live") return;
+    const live = getMarketPriceFor(modal.asset);
+    if (Number.isFinite(Number(live))) {
+      setPriceText(String(live));
+    }
+  }, [modal.visible, modal.asset, priceMode, getMarketPriceFor]);
 
   const handleSubmit = useCallback(async () => {
     const adet = parseNumber(quantityText);
@@ -275,8 +323,17 @@ export default function HesaplarScreen() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>{item.varlikTuru}</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>#{item.portfoyId}</Text>
+            <View style={styles.headerActions}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>#{item.portfoyId}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.trashBtn}
+                onPress={() => openDeleteConfirm(item.portfoyId)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -412,14 +469,34 @@ export default function HesaplarScreen() {
             />
 
             <Text style={styles.inputLabel}>Fiyat</Text>
+            <View style={styles.priceModeRow}>
+              <TouchableOpacity
+                style={[styles.priceModeBtn, priceMode === "live" && styles.priceModeBtnActive]}
+                onPress={() => setPriceMode("live")}
+              >
+                <Text style={[styles.priceModeText, priceMode === "live" && styles.priceModeTextActive]}>
+                  Güncel Fiyat
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.priceModeBtn, priceMode === "manual" && styles.priceModeBtnActive]}
+                onPress={() => setPriceMode("manual")}
+              >
+                <Text style={[styles.priceModeText, priceMode === "manual" && styles.priceModeTextActive]}>
+                  Elle Gir
+                </Text>
+              </TouchableOpacity>
+            </View>
             <TextInput
               value={priceText}
               onChangeText={setPriceText}
               placeholder="Örn: 32,50"
               placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
-              style={styles.input}
+              style={[styles.input, priceMode === "live" && styles.inputReadOnly]}
+              editable={priceMode === "manual"}
             />
+            {priceMode === "live" ? <Text style={styles.helperText}>Güncel fiyat kullanılıyor.</Text> : null}
 
             {!!error && <Text style={styles.error}>{error}</Text>}
 
@@ -444,6 +521,18 @@ export default function HesaplarScreen() {
           <Text style={styles.addAccountText}>Hesap Ekle</Text>
         </TouchableOpacity>
       </View>
+
+      <MessageBox
+        visible={deleteConfirmVisible}
+        title="Hesabı Sil"
+        message="Bu hesabı silmek istiyor musun?"
+        type="error"
+        onClose={closeDeleteConfirm}
+        onCancel={closeDeleteConfirm}
+        onConfirm={confirmDelete}
+        confirmText="Sil"
+        cancelText="Vazgeç"
+      />
     </SafeAreaView>
   );
 }
@@ -472,6 +561,7 @@ const createStyles = (colors: ThemeColors) =>
       elevation: 4,
     },
     cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+    headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
     cardTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
     badge: {
       backgroundColor: colors.accentSoft,
@@ -482,6 +572,16 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.borderStrong,
     },
     badgeText: { color: colors.textMuted, fontSize: 10, fontWeight: "800" },
+    trashBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(239,68,68,0.12)",
+      borderWidth: 1,
+      borderColor: colors.danger,
+    },
 
     cardRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
     label: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
@@ -533,6 +633,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 10,
     },
+    inputReadOnly: { opacity: 0.7 },
     readonlyBox: {
       backgroundColor: colors.surfaceAlt,
       borderRadius: 10,
@@ -567,6 +668,20 @@ const createStyles = (colors: ThemeColors) =>
     dropdownItem: { paddingHorizontal: 12, paddingVertical: 10 },
     dropdownItemText: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
     dropdownItemActive: { color: colors.text },
+    priceModeRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
+    priceModeBtn: {
+      flex: 1,
+      paddingVertical: 8,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: "center",
+    },
+    priceModeBtnActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+    priceModeText: { color: colors.textMuted, fontSize: 12, fontWeight: "800" },
+    priceModeTextActive: { color: colors.text },
+    helperText: { color: colors.textMuted, fontSize: 11, marginTop: 6, fontWeight: "700" },
 
     primaryBtn: {
       marginTop: 14,

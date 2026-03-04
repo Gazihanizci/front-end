@@ -71,7 +71,7 @@ export default function MenuScreen({ navigation }: Props) {
       onPress: () => navigation.navigate("Categories"),
     },
     {
-      title: "Sabit Ödemeler",
+      title: "Genel Ödemeler",
       icon: <Ionicons name="calendar-outline" size={22} color={colors.accent} />,
       onPress: () => navigation.navigate("SabitOdemeler"),
     },

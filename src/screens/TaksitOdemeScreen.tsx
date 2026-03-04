@@ -324,7 +324,7 @@ export default function TaksitOdemeScreen({ navigation }: Props) {
         right={
           <HeaderAction
             icon={<Ionicons name="refresh" size={16} color={colors.text} />}
-            onPress={fetchMy}
+            onPress={onRefresh}
           />
         }
       />

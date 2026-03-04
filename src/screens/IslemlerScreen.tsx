@@ -539,7 +539,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  badgeText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
+  badgeText: { color: colors.text, fontSize: 14, fontWeight: "900" },
   cardBody: { flex: 1 },
   title: { color: colors.text, fontSize: 16, fontWeight: "800" },
   subtitle: { marginTop: 4, color: colors.textMuted, fontSize: 12, fontWeight: "700" },
@@ -591,7 +591,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   closeBtnText: { color: colors.onAccent, fontSize: 14, fontWeight: "900" },
 });
-
 
 
 

@@ -45,6 +45,7 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
   const [msgTitle, setMsgTitle] = useState("");
   const [msgMessage, setMsgMessage] = useState("");
   const [msgType, setMsgType] = useState<"success" | "error" | "info">("info");
+  const [viewMode, setViewMode] = useState<"active" | "archived">("active");
 
   const showMessage = useCallback(
     (title: string, message: string, type: "success" | "error" | "info" = "info") => {
@@ -89,7 +90,7 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
       const arr = await getAll();
       setItems(arr || []);
     } catch (err: any) {
-      console.log("Sabit ödeme listeleme hata:", err?.response?.data || err?.message);
+      console.log("Genel ödeme listeleme hata:", err?.response?.data || err?.message);
       setItems([]);
       setError("Kayıtlar yüklenemedi.");
     } finally {
@@ -115,6 +116,15 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
       showMessage("Eksik Bilgi", "Son ödeme günü YYYY-MM-DD formatında olmalı.", "error");
       return;
     }
+    {
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const due = new Date(`${sonOdemeGunu}T00:00:00`);
+      if (!Number.isNaN(due.getTime()) && due < todayStart) {
+        showMessage("Geçersiz Tarih", "Geçmiş bir tarihe sabit ödeme eklenemez.", "error");
+        return;
+      }
+    }
 
     setSaving(true);
     try {
@@ -135,24 +145,42 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
       });
 
       await fetchList();
-      showMessage("Başarılı", "Sabit ödeme kaydı oluşturuldu.", "success");
+      showMessage("Başarılı", "Genel ödeme kaydı oluşturuldu.", "success");
     } catch (err: any) {
-      console.log("Sabit ödeme create hata:", err?.response?.data || err?.message);
-      showMessage("Hata", "Sabit ödeme kaydı oluşturulamadı.", "error");
+      console.log("Genel ödeme create hata:", err?.response?.data || err?.message);
+      showMessage("Hata", "Genel ödeme kaydı oluşturulamadı.", "error");
     } finally {
       setSaving(false);
     }
   }, [form, saving, showMessage, fetchList]);
 
   const normalizedItems = useMemo(() => {
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const today = startOfDay(new Date());
     return (items || []).map((x: any) => ({
       odemeId: x.odemeId ?? x.id,
-      odemeAdi: String(x.odemeAdi ?? x.ad ?? "").trim() || "Sabit Ödeme",
+      odemeAdi: String(x.odemeAdi ?? x.ad ?? "").trim() || "Genel Ödeme",
       sonOdemeGunu: String(x.sonOdemeGunu ?? "").slice(0, 10),
       aktif: Boolean(x.aktif),
       aciklama: String(x.aciklama ?? ""),
+      isPastDue: (() => {
+        const dueStr = String(x.sonOdemeGunu ?? "").slice(0, 10);
+        if (!dueStr) return false;
+        const due = new Date(`${dueStr}T00:00:00`);
+        if (Number.isNaN(due.getTime())) return false;
+        return startOfDay(due) < today;
+      })(),
     }));
   }, [items]);
+
+  const activeItems = useMemo(
+    () => normalizedItems.filter((x) => x.aktif && !x.isPastDue),
+    [normalizedItems]
+  );
+  const archivedItems = useMemo(
+    () => normalizedItems.filter((x) => !x.aktif || x.isPastDue),
+    [normalizedItems]
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -175,7 +203,7 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
         }
         await fetchList();
       } catch (err: any) {
-        console.log("Sabit ödeme durum güncelleme hata:", err?.response?.data || err?.message);
+        console.log("Genel ödeme durum güncelleme hata:", err?.response?.data || err?.message);
         showMessage("Hata", "Durum güncellenemedi.", "error");
       } finally {
         setIslemYapilanId(null);
@@ -187,8 +215,8 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="Sabit Odemeler"
-        subtitle="Duzenli odeme listesi"
+        title="Genel Ödemeler"
+        subtitle="Genel Ödeme Listesi"
         left={
           <HeaderAction
             label="Geri"
@@ -213,7 +241,7 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
           }
         >
           <View style={styles.card}>
-            <Text style={styles.title}>Yeni Sabit Ödeme</Text>
+            <Text style={styles.title}>Yeni Ödeme</Text>
 
             <Text style={styles.label}>Ödeme Adı</Text>
             <TextInput
@@ -268,12 +296,34 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
                   <Text style={styles.saveButtonText}>Kaydediliyor...</Text>
                 </View>
               ) : (
-                <Text style={styles.saveButtonText}>Sabit Ödeme Ekle</Text>
+                <Text style={styles.saveButtonText}>Genel Ödeme Ekle</Text>
               )}
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.sectionTitle}>Kayıtlar</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Kayıtlar</Text>
+            <View style={styles.segmentRow}>
+              <TouchableOpacity
+                style={[styles.segmentBtn, viewMode === "active" && styles.segmentBtnActive]}
+                onPress={() => setViewMode("active")}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.segmentText, viewMode === "active" && styles.segmentTextActive]}>
+                  Aktif
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.segmentBtn, viewMode === "archived" && styles.segmentBtnActive]}
+                onPress={() => setViewMode("archived")}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.segmentText, viewMode === "archived" && styles.segmentTextActive]}>
+                  Pasif / Süresi Dolan
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
           {loadingList ? (
             <View style={{ paddingVertical: 14, alignItems: "center" }}>
               <ActivityIndicator color={colors.warning} />
@@ -281,42 +331,94 @@ export default function SabitOdemelerScreen({ navigation }: Props) {
             </View>
           ) : error ? (
             <Text style={styles.emptyText}>{error}</Text>
-          ) : normalizedItems.length === 0 ? (
-            <Text style={styles.emptyText}>Henüz kayıt yok.</Text>
-          ) : (
-            normalizedItems.map((item) => (
-              <View key={String(item.odemeId ?? item.odemeAdi)} style={styles.card}>
-                <View style={styles.listHeader}>
-                  <Text style={styles.cardTitle}>{item.odemeAdi}</Text>
-                  <View style={[styles.badge, item.aktif ? styles.badgeActive : styles.badgeMuted]}>
-                    <Text style={styles.badgeText}>{item.aktif ? "Açık" : "Kapalı"}</Text>
+          ) : viewMode === "active" ? (
+            activeItems.length === 0 ? (
+              <Text style={styles.emptyText}>Aktif kayıt yok.</Text>
+            ) : (
+              activeItems.map((item) => (
+                <View key={String(item.odemeId ?? item.odemeAdi)} style={styles.card}>
+                  <View style={styles.listHeader}>
+                    <Text style={styles.cardTitle}>{item.odemeAdi}</Text>
+                    <View style={[styles.badge, styles.badgeActive]}>
+                      <Text style={styles.badgeText}>Açık</Text>
+                    </View>
                   </View>
-                </View>
 
-                <View style={styles.rowStack}>
-                  <Text style={styles.label}>Son Ödeme Günü</Text>
-                  <Text style={styles.value}>{item.sonOdemeGunu || "-"}</Text>
-                </View>
+                  <View style={styles.rowStack}>
+                    <Text style={styles.label}>Son Ödeme Günü</Text>
+                    <Text style={styles.value}>{item.sonOdemeGunu || "-"}</Text>
+                  </View>
 
-                <View style={styles.rowStack}>
-                  <Text style={styles.label}>Açıklama</Text>
-                  <Text style={styles.value}>{item.aciklama || "-"}</Text>
-                </View>
+                  <View style={styles.rowStack}>
+                    <Text style={styles.label}>Açıklama</Text>
+                    <Text style={styles.value}>{item.aciklama || "-"}</Text>
+                  </View>
 
-                <TouchableOpacity
-                  style={[styles.toggleBtn, islemYapilanId === item.odemeId && { opacity: 0.6 }]}
-                  activeOpacity={0.85}
-                  onPress={() => toggleAktif(item.odemeId, item.aktif)}
-                  disabled={islemYapilanId === item.odemeId}
-                >
-                  {islemYapilanId === item.odemeId ? (
-                    <ActivityIndicator color={colors.onAccent} />
-                  ) : (
-                    <Text style={styles.toggleBtnText}>{item.aktif ? "Pasife Çek" : "Aktife Al"}</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            ))
+                  <TouchableOpacity
+                    style={[styles.toggleBtn, islemYapilanId === item.odemeId && { opacity: 0.6 }]}
+                    activeOpacity={0.85}
+                    onPress={() => toggleAktif(item.odemeId, item.aktif)}
+                    disabled={islemYapilanId === item.odemeId}
+                  >
+                    {islemYapilanId === item.odemeId ? (
+                      <ActivityIndicator color={colors.onAccent} />
+                    ) : (
+                      <Text style={styles.toggleBtnText}>Pasife Çek</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ))
+            )
+          ) : (
+            archivedItems.length === 0 ? (
+              <Text style={styles.emptyText}>Pasif veya süresi dolan kayıt yok.</Text>
+            ) : (
+              archivedItems.map((item) => (
+                <View key={String(item.odemeId ?? item.odemeAdi)} style={styles.card}>
+                  <View style={styles.listHeader}>
+                    <Text style={styles.cardTitle}>{item.odemeAdi}</Text>
+                    <View style={[styles.badge, item.aktif ? styles.badgeActive : styles.badgeMuted]}>
+                      <Text style={styles.badgeText}>{item.aktif ? "Açık" : "Kapalı"}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.rowStack}>
+                    <Text style={styles.label}>Son Ödeme Günü</Text>
+                    <Text style={styles.value}>{item.sonOdemeGunu || "-"}</Text>
+                  </View>
+
+                  <View style={styles.rowStack}>
+                    <Text style={styles.label}>Açıklama</Text>
+                    <Text style={styles.value}>{item.aciklama || "-"}</Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleBtn,
+                      islemYapilanId === item.odemeId && { opacity: 0.6 },
+                      !item.aktif && item.isPastDue && styles.toggleBtnDisabled,
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      if (!item.aktif && item.isPastDue) {
+                        showMessage("Süre Doldu", "Son ödeme günü geçmiş olduğu için aktife alınamaz.", "error");
+                        return;
+                      }
+                      toggleAktif(item.odemeId, item.aktif);
+                    }}
+                    disabled={islemYapilanId === item.odemeId}
+                  >
+                    {islemYapilanId === item.odemeId ? (
+                      <ActivityIndicator color={colors.onAccent} />
+                    ) : (
+                      <Text style={styles.toggleBtnText}>
+                        {!item.aktif && item.isPastDue ? "Süre Doldu" : item.aktif ? "Pasife Çek" : "Aktife Al"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ))
+            )
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -345,7 +447,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   title: { color: colors.text, fontSize: 16, fontWeight: "900", marginBottom: 6 },
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: "900" },
+  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginBottom: 8 },
+  segmentRow: { flexDirection: "row", gap: 8 },
+  segmentBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surfaceAlt,
+  },
+  segmentBtnActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+  segmentText: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
+  segmentTextActive: { color: colors.text },
   emptyText: { color: colors.textMuted, fontSize: 12, fontWeight: "700", marginBottom: 12 },
   label: { color: colors.textMuted, fontSize: 12, fontWeight: "800", marginBottom: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
@@ -405,6 +520,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: "center",
+  },
+  toggleBtnDisabled: {
+    backgroundColor: colors.textMuted,
   },
   toggleBtnText: { color: colors.onAccent, fontSize: 13, fontWeight: "900" },
   saveButton: {

@@ -20,6 +20,9 @@ import BildirimlerScreen from "./src/screens/BildirimlerScreen";
 import HesaplarScreen from "./src/screens/HesaplarScreen";
 import YatirimAzaltScreen from "./src/screens/YatirimAzaltScreen";
 import FamilyPermissionInboxScreen from "./src/screens/FamilyPermissionInboxScreen";
+import FamilyNotesScreen from "./src/screens/FamilyNotesScreen";
+import FamilyNotePermissionAdminScreen from "./src/screens/FamilyNotePermissionAdminScreen";
+import MyFamilyNoteRequestsScreen from "./src/screens/MyFamilyNoteRequestsScreen";
 import NotesListScreen from "./src/screens/NotesListScreen";
 import ChatScreen from "./src/screens/ChatScreen";
 import KurlarScreen from "./src/screens/KurlarScreen";
@@ -45,6 +48,9 @@ export type RootStackParamList = {
   Hesaplar: undefined;
   FamilyPermissionInbox: undefined;
   Notlar: undefined;
+  FamilyNotes: undefined;
+  FamilyNotePermissionAdmin: undefined;
+  MyFamilyNoteRequests: undefined;
   Chat: undefined;
   Kurlar: undefined;
   YatirimAzalt: { yatirimId: number; hesapAdi: string; varlikTuru: "USD" | "EUR" | "ALTIN" | "TL" };
@@ -112,6 +118,15 @@ export default function App() {
               <Stack.Screen name="Hesaplar" component={HesaplarScreen} />
               <Stack.Screen name="FamilyPermissionInbox" component={FamilyPermissionInboxScreen} />
               <Stack.Screen name="Notlar" component={NotesListScreen} />
+              <Stack.Screen name="FamilyNotes" component={FamilyNotesScreen} />
+              <Stack.Screen
+                name="FamilyNotePermissionAdmin"
+                component={FamilyNotePermissionAdminScreen}
+              />
+              <Stack.Screen
+                name="MyFamilyNoteRequests"
+                component={MyFamilyNoteRequestsScreen}
+              />
               <Stack.Screen name="Chat" component={ChatScreen} />
               <Stack.Screen name="Kurlar" component={KurlarScreen} />
               <Stack.Screen name="YatirimAzalt" component={YatirimAzaltScreen} />

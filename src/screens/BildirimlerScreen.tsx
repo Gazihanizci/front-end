@@ -7,6 +7,7 @@ import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import api from "../config/api";
 import IzinTalepCard from "../components/IzinTalepCard";
 import { ThemeColors, useTheme } from "../theme/theme";
+import { approveRequest, getPendingRequests, rejectRequest } from "../services/familyNotePermissionService";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Bildirimler">;
 
@@ -15,16 +16,22 @@ export default function BildirimlerScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
+  const [notePermItems, setNotePermItems] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [noteBusyId, setNoteBusyId] = useState<number | null>(null);
 
   const fetchInbox = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get("/api/ailecuzdani/izin/inbox");
-      const arr = Array.isArray(res.data) ? res.data : [];
+      const [cuzdanRes, noteRes] = await Promise.all([
+        api.get("/api/ailecuzdani/izin/inbox"),
+        getPendingRequests(),
+      ]);
+      const arr = Array.isArray(cuzdanRes.data) ? cuzdanRes.data : [];
       setItems(arr);
+      setNotePermItems(noteRes || []);
     } catch (err: any) {
       const status = err?.response?.status;
       console.log("Bildirim inbox hata:", err?.response?.data || err?.message);
@@ -34,6 +41,7 @@ export default function BildirimlerScreen({ navigation }: Props) {
         setError("Bildirimler yüklenemedi.");
       }
       setItems([]);
+      setNotePermItems([]);
     } finally {
       setLoading(false);
     }
@@ -77,6 +85,40 @@ export default function BildirimlerScreen({ navigation }: Props) {
     []
   );
 
+  const onApproveNotePerm = useCallback(
+    async (id?: number) => {
+      if (!id) return;
+      setNoteBusyId(id);
+      try {
+        await approveRequest(id);
+        setNotePermItems((prev) => prev.filter((x: any) => Number(x.id ?? x.talepId) !== id));
+      } catch (err: any) {
+        console.log("Note izin approve hata:", err?.response?.data || err?.message);
+        setError("Onay işlemi başarısız.");
+      } finally {
+        setNoteBusyId(null);
+      }
+    },
+    []
+  );
+
+  const onRejectNotePerm = useCallback(
+    async (id?: number) => {
+      if (!id) return;
+      setNoteBusyId(id);
+      try {
+        await rejectRequest(id);
+        setNotePermItems((prev) => prev.filter((x: any) => Number(x.id ?? x.talepId) !== id));
+      } catch (err: any) {
+        console.log("Note izin reject hata:", err?.response?.data || err?.message);
+        setError("Red işlemi başarısız.");
+      } finally {
+        setNoteBusyId(null);
+      }
+    },
+    []
+  );
+
   const normalized = useMemo(() => {
     return (items || []).map((x: any) => ({
       talepId: Number(x.talepId ?? x.id),
@@ -85,6 +127,14 @@ export default function BildirimlerScreen({ navigation }: Props) {
       aciklama: String(x.aciklama ?? ""),
     }));
   }, [items]);
+
+  const normalizedNotePerms = useMemo(() => {
+    return (notePermItems || []).map((x: any) => ({
+      id: Number(x.id ?? x.talepId),
+      requesterUserId: Number(x.requesterUserId ?? x.kullaniciId ?? 0),
+      createdAt: String(x.createdAt ?? x.tarih ?? ""),
+    }));
+  }, [notePermItems]);
 
   return (
     <View style={styles.container}>
@@ -109,9 +159,9 @@ export default function BildirimlerScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>İzin Talepleri</Text>
-          {!loading && !error && normalized.length > 0 ? (
+          {!loading && !error && (normalized.length + normalizedNotePerms.length) > 0 ? (
             <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{normalized.length}</Text>
+              <Text style={styles.countBadgeText}>{normalized.length + normalizedNotePerms.length}</Text>
             </View>
           ) : null}
         </View>
@@ -123,21 +173,45 @@ export default function BildirimlerScreen({ navigation }: Props) {
           </View>
         ) : error ? (
           <Text style={styles.error}>{error}</Text>
-        ) : normalized.length === 0 ? (
-          <Text style={styles.muted}>Bekleyen izin talebi yok.</Text>
+        ) : normalized.length === 0 && normalizedNotePerms.length === 0 ? (
+          <Text style={styles.muted}>Bekleyen bildirim yok.</Text>
         ) : (
-          normalized.map((item) => (
-            <IzinTalepCard
-              key={String(item.talepId)}
-              adSoyad={item.adSoyad}
-              createdAt={item.createdAt}
-              aciklama={item.aciklama}
-              sourceLabel="Aile Cüzdanı"
-              onApprove={() => onApprove(item.talepId)}
-              onReject={() => onReject(item.talepId)}
-              loading={busyId === item.talepId}
-            />
-          ))
+          <>
+            {normalized.length > 0 ? (
+              <>
+                <Text style={styles.sectionTitleSmall}>Aile Cüzdanı Talepleri</Text>
+                {normalized.map((item) => (
+                  <IzinTalepCard
+                    key={`cuzdan-${item.talepId}`}
+                    adSoyad={item.adSoyad}
+                    createdAt={item.createdAt}
+                    aciklama={item.aciklama}
+                    sourceLabel="Aile Cüzdanı"
+                    onApprove={() => onApprove(item.talepId)}
+                    onReject={() => onReject(item.talepId)}
+                    loading={busyId === item.talepId}
+                  />
+                ))}
+              </>
+            ) : null}
+
+            {normalizedNotePerms.length > 0 ? (
+              <>
+                <Text style={styles.sectionTitleSmall}>Aile Not İzin Talepleri</Text>
+                {normalizedNotePerms.map((item) => (
+                  <IzinTalepCard
+                    key={`note-${item.id}`}
+                    adSoyad={`Kullanıcı ID: ${item.requesterUserId}`}
+                    createdAt={item.createdAt}
+                    sourceLabel="Aile Not İzni"
+                    onApprove={() => onApproveNotePerm(item.id)}
+                    onReject={() => onRejectNotePerm(item.id)}
+                    loading={noteBusyId === item.id}
+                  />
+                ))}
+              </>
+            ) : null}
+          </>
         )}
       </ScrollView>
     </View>
@@ -155,6 +229,7 @@ const createStyles = (colors: ThemeColors) =>
       marginBottom: 10,
     },
     sectionTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+    sectionTitleSmall: { color: colors.textMuted, fontSize: 12, fontWeight: "800", marginTop: 6, marginBottom: 8 },
     countBadge: {
       minWidth: 22,
       height: 22,
@@ -171,3 +246,5 @@ const createStyles = (colors: ThemeColors) =>
     muted: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
     error: { color: colors.danger, fontSize: 12, fontWeight: "800" },
   });
+
+

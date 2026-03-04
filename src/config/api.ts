@@ -39,6 +39,8 @@ api.interceptors.response.use(
       url.includes("/api/ailekatil") ||
       url.includes("/api/aileler/katil") ||
       url.includes("/api/ozelislemler") ||
+      url.includes("/api/aile-not-izin") ||
+      url.includes("/api/notlar") ||
       url.includes("/api/market") ||
       url.includes("/api/ailecuzdani/izin/inbox") ||
       url.includes("/api/ailecuzdani/izin/") ||

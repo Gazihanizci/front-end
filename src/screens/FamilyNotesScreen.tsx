@@ -1,7 +1,6 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   RefreshControl,
@@ -17,10 +16,11 @@ import { RootStackParamList } from "../../App";
 import ScreenHeader, { HeaderAction } from "../components/ScreenHeader";
 import { ThemeColors, ThemeMode, useTheme } from "../theme/theme";
 import api from "../config/api";
-import { requestPermission } from "../services/familyNotePermissionService";
 import MessageBox from "../components/MessageBox";
+import { requestPermission } from "../services/familyNotePermissionService";
 
-type Props = NativeStackScreenProps<RootStackParamList, "Notlar">;
+type Props = NativeStackScreenProps<RootStackParamList, "FamilyNotes">;
+
 type NoteType = "USER" | "FAMILY";
 type NotResponse = {
   notId: number;
@@ -30,7 +30,7 @@ type NotResponse = {
   aileId: number | null;
 };
 
-export default function NotesListScreen({ navigation }: Props) {
+export default function FamilyNotesScreen({ navigation }: Props) {
   const { colors, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, mode), [colors, mode]);
 
@@ -38,73 +38,68 @@ export default function NotesListScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<NoteType>("USER");
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingNote, setEditingNote] = useState<NotResponse | null>(null);
   const [noteText, setNoteText] = useState("");
-  const [noteType, setNoteType] = useState<NoteType>("USER");
   const [saving, setSaving] = useState(false);
+
+  const [msgVisible, setMsgVisible] = useState(false);
+  const [msgTitle, setMsgTitle] = useState("");
+  const [msgMessage, setMsgMessage] = useState("");
+  const [msgType, setMsgType] = useState<"success" | "error" | "info">("info");
+
   const [permissionVisible, setPermissionVisible] = useState(false);
   const [requestingPerm, setRequestingPerm] = useState(false);
 
-  const fetchNotes = useCallback(async (type: NoteType) => {
+  const showMessage = useCallback(
+    (title: string, message: string, type: "success" | "error" | "info" = "info") => {
+      setMsgTitle(title);
+      setMsgMessage(message);
+      setMsgType(type);
+      setMsgVisible(true);
+    },
+    []
+  );
+
+  const fetchNotes = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const url = type === "USER" ? "/api/notlar" : "/api/notlar/aile";
-      const res = await api.get(url);
+      const res = await api.get("/api/notlar/aile");
       const data = Array.isArray(res.data) ? (res.data as NotResponse[]) : [];
-      const filtered = data.filter((x) => x.notTuru === type);
-      setItems(filtered);
+      setItems(data.filter((x) => x.notTuru === "FAMILY"));
     } catch (err: any) {
-      const status = err?.response?.status;
-      const apiMsg = String(
-        err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          err?.response?.data ||
-          err?.message ||
-          ""
-      ).toLowerCase();
-      const isFamilyTab = type === "FAMILY";
-      const noPermission = apiMsg.includes("izin") && apiMsg.includes("not");
-      if (isFamilyTab && (status === 401 || status === 403 || noPermission)) {
-        setPermissionVisible(true);
-        setItems([]);
-      } else {
-        console.log("Notlar listesi hata:", err?.response?.data || err?.message);
-        setError("Notlar yüklenemedi.");
-        setItems([]);
-      }
+      console.log("Aile notları hata:", err?.response?.data || err?.message);
+      setError("Notlar yüklenemedi.");
+      setItems([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchNotes(activeTab);
-  }, [fetchNotes, activeTab]);
+    fetchNotes();
+  }, [fetchNotes]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetchNotes(activeTab);
+      await fetchNotes();
     } finally {
       setRefreshing(false);
     }
-  }, [fetchNotes, activeTab]);
+  }, [fetchNotes]);
 
   const openCreate = () => {
     setEditingNote(null);
     setNoteText("");
-    setNoteType(activeTab);
     setModalVisible(true);
   };
 
   const openEdit = (note: NotResponse) => {
     setEditingNote(note);
     setNoteText(note.notMetini);
-    setNoteType(note.notTuru);
     setModalVisible(true);
   };
 
@@ -123,16 +118,15 @@ export default function NotesListScreen({ navigation }: Props) {
     setError(null);
     try {
       if (editingNote) {
-        const url =
-          editingNote.notTuru === "FAMILY"
-            ? `/api/notlar/aile/${editingNote.notId}`
-            : `/api/notlar/${editingNote.notId}`;
-        await api.put(url, { notMetini: text, notTuru: editingNote.notTuru });
+        await api.put(`/api/notlar/aile/${editingNote.notId}`, {
+          notMetini: text,
+          notTuru: "FAMILY",
+        });
       } else {
-        await api.post("/api/notlar", { notMetini: text, notTuru: noteType });
+        await api.post("/api/notlar", { notMetini: text, notTuru: "FAMILY" });
       }
       closeModal();
-      await fetchNotes(activeTab);
+      await fetchNotes();
     } catch (err: any) {
       const status = err?.response?.status;
       const apiMsg = String(
@@ -141,17 +135,27 @@ export default function NotesListScreen({ navigation }: Props) {
           err?.response?.data ||
           err?.message ||
           ""
-      ).toLowerCase();
-      const isFamily = (editingNote?.notTuru ?? noteType) === "FAMILY";
-      const noPermission = apiMsg.includes("izin") && apiMsg.includes("not");
-      if (isFamily && (status === 401 || status === 403 || noPermission)) {
+      );
+      const noPermission = apiMsg.toLowerCase().includes("izin") && apiMsg.toLowerCase().includes("not");
+      if (status === 401 || status === 403 || noPermission) {
         setPermissionVisible(true);
+      } else if (status >= 500) {
+        showMessage("Hata", "Sunucu hatası oluştu.", "error");
       } else {
-        console.log("Not kaydetme hata:", err?.response?.data || err?.message);
-        setError("Not kaydedilemedi.");
+        showMessage("Hata", "Not kaydedilemedi.", "error");
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const deleteNote = async (note: NotResponse) => {
+    try {
+      await api.delete(`/api/notlar/aile/${note.notId}`);
+      setItems((prev) => prev.filter((x) => x.notId !== note.notId));
+    } catch (err: any) {
+      console.log("Not silme hata:", err?.response?.data || err?.message);
+      showMessage("Hata", "Not silinemedi.", "error");
     }
   };
 
@@ -161,33 +165,12 @@ export default function NotesListScreen({ navigation }: Props) {
     try {
       await requestPermission();
       setPermissionVisible(false);
-      setError(null);
-    } catch {
-      setError("İzin isteği gönderilemedi.");
+      showMessage("Başarılı", "Permission request sent to family admin.", "success");
+    } catch (err: any) {
+      showMessage("Hata", "İzin isteği gönderilemedi.", "error");
     } finally {
       setRequestingPerm(false);
     }
-  };
-
-  const confirmDelete = (note: NotResponse) => {
-    Alert.alert("Notu Sil", "Silmek istiyor musun?", [
-      { text: "Vazgeç", style: "cancel" },
-      {
-        text: "Sil",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const url =
-              note.notTuru === "FAMILY" ? `/api/notlar/aile/${note.notId}` : `/api/notlar/${note.notId}`;
-            await api.delete(url);
-            setItems((prev) => prev.filter((x) => x.notId !== note.notId));
-          } catch (err: any) {
-            console.log("Not silme hata:", err?.response?.data || err?.message);
-            setError("Not silinemedi.");
-          }
-        },
-      },
-    ]);
   };
 
   const renderItem = ({ item }: { item: NotResponse }) => {
@@ -199,8 +182,8 @@ export default function NotesListScreen({ navigation }: Props) {
             {item.notMetini}
           </Text>
           <View style={styles.noteMetaRow}>
-            <View style={[styles.noteBadge, item.notTuru === "FAMILY" ? styles.badgeFamily : styles.badgeUser]}>
-              <Text style={styles.noteBadgeText}>{item.notTuru === "FAMILY" ? "Aile" : "Kişisel"}</Text>
+            <View style={[styles.noteBadge, styles.badgeFamily]}>
+              <Text style={styles.noteBadgeText}>Aile</Text>
             </View>
             <Text style={styles.noteDate}>{created}</Text>
           </View>
@@ -209,7 +192,7 @@ export default function NotesListScreen({ navigation }: Props) {
           <TouchableOpacity style={styles.iconBtn} onPress={() => openEdit(item)} activeOpacity={0.8}>
             <Ionicons name="create-outline" size={18} color={colors.warning} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => confirmDelete(item)} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => deleteNote(item)} activeOpacity={0.8}>
             <Ionicons name="trash-outline" size={18} color={colors.danger} />
           </TouchableOpacity>
         </View>
@@ -220,8 +203,8 @@ export default function NotesListScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="Notlar"
-        subtitle="Kısa notlarını sakla"
+        title="Aile Notları"
+        subtitle="Aile notlarını yönet"
         left={
           <HeaderAction
             label="Geri"
@@ -229,7 +212,7 @@ export default function NotesListScreen({ navigation }: Props) {
             onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home"))}
           />
         }
-        right={null}
+        right={<HeaderAction label="Yeni" onPress={openCreate} />}
       />
 
       <FlatList
@@ -238,31 +221,7 @@ export default function NotesListScreen({ navigation }: Props) {
         contentContainerStyle={styles.listContent}
         renderItem={renderItem}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.warning} />}
-        ListHeaderComponent={
-          <View style={styles.headerRow}>
-            <View style={styles.tabRow}>
-              {(["USER", "FAMILY"] as NoteType[]).map((t) => {
-                const active = activeTab === t;
-                return (
-                  <TouchableOpacity
-                    key={t}
-                    style={[styles.tabBtn, active && styles.tabBtnActive]}
-                    onPress={() => setActiveTab(t)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.tabText, active && styles.tabTextActive]}>
-                      {t === "USER" ? "Kişisel Notlar" : "Aile Notları"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <TouchableOpacity style={styles.newBtn} onPress={openCreate} activeOpacity={0.85}>
-              <Ionicons name="add" size={18} color={colors.onAccent} />
-              <Text style={styles.newBtnText}>Yeni Not</Text>
-            </TouchableOpacity>
-          </View>
-        }
+        ListHeaderComponent={<View style={{ height: 6 }} />}
         ListEmptyComponent={
           loading ? (
             <View style={styles.center}>
@@ -272,7 +231,7 @@ export default function NotesListScreen({ navigation }: Props) {
           ) : error ? (
             <Text style={styles.error}>{error}</Text>
           ) : (
-            <Text style={styles.muted}>Henüz not yok.</Text>
+            <Text style={styles.muted}>Henüz aile notu yok.</Text>
           )
         }
       />
@@ -280,7 +239,7 @@ export default function NotesListScreen({ navigation }: Props) {
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>{editingNote ? "Not Düzenle" : "Yeni Not"}</Text>
+            <Text style={styles.sheetTitle}>{editingNote ? "Not Düzenle" : "Yeni Aile Notu"}</Text>
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
@@ -292,7 +251,6 @@ export default function NotesListScreen({ navigation }: Props) {
                 textAlignVertical="top"
               />
             </View>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
             <TouchableOpacity
               style={[styles.primaryBtn, saving && { opacity: 0.6 }]}
               onPress={saveNote}
@@ -310,13 +268,22 @@ export default function NotesListScreen({ navigation }: Props) {
       <MessageBox
         visible={permissionVisible}
         title="Yetki Yok"
-        message="Aile notu yazma izniniz yok. İzin istemek ister misiniz?"
+        message="You don't have permission to write family notes. Request permission?"
         type="info"
         onClose={() => setPermissionVisible(false)}
         onCancel={() => setPermissionVisible(false)}
         onConfirm={requestPermissionNow}
-        confirmText={requestingPerm ? "Gönderiliyor..." : "İzin İste"}
+        confirmText={requestingPerm ? "Gönderiliyor..." : "Request Permission"}
         cancelText="Vazgeç"
+      />
+
+      <MessageBox
+        visible={msgVisible}
+        title={msgTitle}
+        message={msgMessage}
+        type={msgType}
+        onClose={() => setMsgVisible(false)}
+        confirmText="Tamam"
       />
     </View>
   );
@@ -326,43 +293,20 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     listContent: { paddingHorizontal: 16, paddingBottom: 28, gap: 10 },
-    headerRow: { marginBottom: 6, gap: 10 },
-    tabRow: { flexDirection: "row", gap: 8 },
-    tabBtn: {
-      flex: 1,
-      paddingVertical: 10,
-      borderRadius: 12,
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-      alignItems: "center",
-    },
-    tabBtnActive: {
-      backgroundColor: colors.accent,
-      borderColor: colors.accent,
-    },
-    tabText: { color: colors.text, fontWeight: "800", fontSize: 12 },
-    tabTextActive: { color: colors.onAccent },
-    newBtn: {
-      alignSelf: "flex-start",
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      backgroundColor: colors.warning,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
-      borderRadius: 12,
-    },
-    newBtnText: { color: colors.onAccent, fontWeight: "900", fontSize: 13 },
     noteCard: {
       backgroundColor: colors.surface,
-      borderRadius: 16,
-      padding: 14,
+      borderRadius: 14,
+      padding: 16,
       borderWidth: 1,
       borderColor: colors.border,
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
+      shadowColor: "#000",
+      shadowOpacity: 0.12,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
     },
     noteText: { color: colors.text, fontSize: 14, fontWeight: "700" },
     noteMetaRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8 },
@@ -376,7 +320,6 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) =>
       backgroundColor: colors.surfaceAlt,
     },
     noteBadgeText: { color: colors.text, fontSize: 10, fontWeight: "900" },
-    badgeUser: {},
     badgeFamily: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
     noteActions: { flexDirection: "row", gap: 8 },
     iconBtn: {
@@ -407,10 +350,7 @@ const createStyles = (colors: ThemeColors, mode: ThemeMode) =>
       borderColor: colors.border,
     },
     sheetTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginBottom: 10 },
-    inputContainer: {
-      flex: 1,
-      marginBottom: 10,
-    },
+    inputContainer: { flex: 1, marginBottom: 10 },
     input: {
       backgroundColor: colors.surfaceAlt,
       color: colors.text,

@@ -121,9 +121,13 @@ export default function MenuScreen({ navigation }: Props) {
 
   const fetchNotifCount = useCallback(async () => {
     try {
-      const res = await api.get("/api/ailecuzdani/izin/inbox");
-      const arr = Array.isArray(res.data) ? res.data : [];
-      setNotifCount(arr.length);
+      const [cuzdanRes, noteRes] = await Promise.all([
+        api.get("/api/ailecuzdani/izin/inbox"),
+        api.get("/api/aile-not-izin/pending"),
+      ]);
+      const cuzdArr = Array.isArray(cuzdanRes.data) ? cuzdanRes.data : [];
+      const noteArr = Array.isArray(noteRes.data) ? noteRes.data : [];
+      setNotifCount(cuzdArr.length + noteArr.length);
     } catch (err) {
       console.log("Menu bildirim sayısı hata:", err);
       setNotifCount(0);
@@ -248,11 +252,7 @@ export default function MenuScreen({ navigation }: Props) {
           <View style={{ flex: 1 }}>
             <Text style={styles.menuText}>İzinler</Text>
           </View>
-          {notifCount > 0 ? (
-            <View style={styles.notifBadge}>
-              <Text style={styles.notifBadgeText}>{notifCount}</Text>
-            </View>
-          ) : null}
+          {notifCount > 0 ? <View style={styles.notifDot} /> : null}
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
@@ -363,6 +363,18 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 11,
       fontWeight: "900",
     },
+    notifDot: {
+      position: "absolute",
+      top: -4,
+      right: -4,
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.danger,
+      borderWidth: 1,
+      borderColor: colors.surface,
+      zIndex: 2,
+    },
 
     divider: {
       height: 1,
@@ -453,3 +465,4 @@ const createStyles = (colors: ThemeColors) =>
     themeToggleThumbRight: { right: 5 },
 
   });
+
